@@ -6,6 +6,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            sender.windows.first(where: { $0.canBecomeKey })?.makeKeyAndOrderFront(nil)
+        }
+        return true
+    }
 }
 
 @main
@@ -14,12 +25,14 @@ struct MunbynLabelerApp: App {
     @StateObject private var appStore = AppStore()
 
     var body: some Scene {
-        WindowGroup("Munbyn Labeler", id: "main") {
+        Window("Munbyn Labeler", id: "main") {
             ContentView()
                 .environmentObject(appStore)
                 .frame(minWidth: 920, minHeight: 620)
                 .onOpenURL { url in
                     appStore.handleIncomingURL(url)
+                    NSApp.activate(ignoringOtherApps: true)
+                    NSApp.windows.first(where: { $0.canBecomeKey })?.makeKeyAndOrderFront(nil)
                 }
         }
         .defaultSize(width: 1_080, height: 720)

@@ -116,10 +116,12 @@ cat >"$INFO_PLIST" <<PLIST
   <string>AppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>LSMultipleInstancesProhibited</key>
+  <true/>
   <key>CFBundleShortVersionString</key>
-  <string>0.5.7</string>
+  <string>0.5.8</string>
   <key>CFBundleVersion</key>
-  <string>13</string>
+  <string>14</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
