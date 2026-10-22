@@ -15,19 +15,14 @@ final class AppStore: ObservableObject {
     @Published var selectedShipmentKind: ShipmentKind {
         didSet {
             defaults.set(selectedShipmentKind.rawValue, forKey: Keys.selectedShipmentKind)
-            selectedFormatID = selectedShipmentKind == .letter
-                ? defaults.string(forKey: Keys.lastLetterFormatID) ?? LabelFormat.address89x36.id
-                : LabelFormat.shipping100x150.id
         }
     }
     @Published var speed = 4
     @Published var density = 8
-    @Published var selectedFormatID: String {
+    @Published var letterFormatID: String {
         didSet {
-            defaults.set(selectedFormatID, forKey: Keys.selectedFormatID)
-            if selectedShipmentKind == .letter {
-                defaults.set(selectedFormatID, forKey: Keys.lastLetterFormatID)
-            }
+            defaults.set(letterFormatID, forKey: Keys.lastLetterFormatID)
+            defaults.set(letterFormatID, forKey: Keys.selectedFormatID)
         }
     }
     @Published var customWidthMM: Double {
@@ -85,16 +80,11 @@ final class AppStore: ObservableObject {
             rawValue: defaults.string(forKey: Keys.selectedShipmentKind) ?? ""
         ) ?? .letter
         selectedShipmentKind = initialShipmentKind
-        let storedFormatID = defaults.string(forKey: Keys.selectedFormatID)
-        if initialShipmentKind == .parcel {
-            selectedFormatID = LabelFormat.shipping100x150.id
-        } else {
-            selectedFormatID = defaults.string(forKey: Keys.lastLetterFormatID)
-                ?? storedFormatID
-                ?? LabelFormat.address89x36.id
-        }
-        customWidthMM = defaults.object(forKey: Keys.customWidthMM) as? Double ?? 100
-        customHeightMM = defaults.object(forKey: Keys.customHeightMM) as? Double ?? 150
+        let storedLetterFormatID = defaults.string(forKey: Keys.lastLetterFormatID)
+            ?? defaults.string(forKey: Keys.selectedFormatID)
+        letterFormatID = LabelFormat.normalizedLetterFormatID(storedLetterFormatID)
+        customWidthMM = defaults.object(forKey: Keys.customWidthMM) as? Double ?? 89
+        customHeightMM = defaults.object(forKey: Keys.customHeightMM) as? Double ?? 36
         senderName = defaults.string(forKey: Keys.senderName) ?? ""
         senderStreet = defaults.string(forKey: Keys.senderStreet) ?? ""
         senderPostalCode = defaults.string(forKey: Keys.senderPostalCode) ?? ""
@@ -103,10 +93,14 @@ final class AppStore: ObservableObject {
     }
 
     var selectedLabelFormat: LabelFormat {
-        if selectedFormatID == "custom" {
+        selectedShipmentKind == .parcel ? .shipping100x150 : selectedLetterLabelFormat
+    }
+
+    var selectedLetterLabelFormat: LabelFormat {
+        if letterFormatID == "custom" {
             return .custom(widthMM: customWidthMM, heightMM: customHeightMM)
         }
-        return LabelFormat.presets.first(where: { $0.id == selectedFormatID }) ?? .shipping100x150
+        return LabelFormat.letterPresets.first(where: { $0.id == letterFormatID }) ?? .address89x36
     }
 
     var senderAddress: SenderAddress {
@@ -333,4 +327,5 @@ final class AppStore: ObservableObject {
         recipientCity = recipient.city
         recipientCountry = recipient.country.isEmpty ? "Deutschland" : recipient.country
     }
+
 }

@@ -43,6 +43,21 @@ public struct LabelFormat: Codable, Equatable, Hashable, Identifiable, Sendable 
         .square50
     ]
 
+    public static let letterPresets: [LabelFormat] = [
+        .address89x36,
+        .address70x36,
+        .product100x50,
+        .square50
+    ]
+
+    public static func normalizedLetterFormatID(_ storedID: String?) -> String {
+        guard let storedID else { return address89x36.id }
+        if storedID == "custom" || letterPresets.contains(where: { $0.id == storedID }) {
+            return storedID
+        }
+        return address89x36.id
+    }
+
     public let id: String
     public let name: String
     public let widthMM: Double

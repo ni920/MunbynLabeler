@@ -199,13 +199,17 @@ erforderlich.
 
 ## Etikettenformate
 
-Das Format wird auf der Seite **Drucken** vor dem Import ausgewählt. Es gilt für
-neu importierte Dateien, Etsy-Adressetiketten und das Testetikett. Bereits in
-der Warteschlange liegende Aufträge behalten ihre ursprüngliche Größe.
+Das kleinere Briefformat wird auf der Seite **Drucken** ausgewählt und gilt für
+neu erstellte Etsy-Adressetiketten. **89 × 36 mm** ist die Standardgröße. Für
+Briefe stehen vier kompakte Vorlagen sowie **Eigenes Format** zur Verfügung.
+Bereits in der Warteschlange liegende Aufträge behalten ihre ursprüngliche
+Größe.
 
-Neben den fünf Vorlagen kann **Eigenes Format** gewählt werden. Die Breite ist
-auf den Druckbereich des RW403B von maximal 108 mm begrenzt. PDF- und
-Bildinhalte werden proportional eingepasst und nicht verzerrt.
+DHL-Paketlabel werden unabhängig vom Briefformat immer als **100 × 150 mm**
+importiert. Die Breite eigener Formate ist auf den Druckbereich des RW403B von
+maximal 108 mm begrenzt. PDF- und Bildinhalte werden proportional eingepasst
+und nicht verzerrt. Das Testetikett verwendet das Format der aktuell gewählten
+Versandart.
 
 ## Brief oder Paket vorbereiten
 
@@ -214,7 +218,7 @@ Auf der Seite **Drucken** wird zuerst **Brief** oder **Paket** gewählt.
 Für einen Brief:
 
 1. Empfänger und Absender direkt in das Formular eintragen.
-2. Beim ersten Mal ist **89 × 36 mm** vorausgewählt. Bei Bedarf kann ein anderes Format ausgewählt werden; die App merkt sich das zuletzt verwendete Briefformat.
+2. **89 × 36 mm** ist vorausgewählt. Für Briefe werden nur die kleineren Adressformate angeboten; eine alte Auswahl von 100 × 150 mm wird automatisch auf 89 × 36 mm zurückgesetzt. Die App merkt sich das zuletzt verwendete Briefformat.
 3. **Druckvorschau erstellen** auswählen.
 4. Das gerasterte Etikett kontrollieren und **Jetzt drucken** auswählen.
 
@@ -229,6 +233,8 @@ Für ein Paket:
 2. **DHL-PDF auswählen …** anklicken.
 3. Das importierte 100 × 150-mm-Label in der Druckvorschau kontrollieren.
 4. **Jetzt drucken** auswählen.
+
+Paketlabel bleiben unabhängig vom gewählten Briefformat fest auf **100 × 150 mm**.
 
 Der Etsy-CSV-Import ist optional. Mit **Aus Etsy-CSV übernehmen …** kann die
 Empfängeradresse einer Bestellung ins Brief-Formular übernommen werden. Dazu in

@@ -57,6 +57,12 @@ do {
     let addressFormat = LabelFormat.address89x36
     try require(addressFormat.widthDots == 712, "89 mm label width has wrong 8 dots/mm conversion")
     try require(addressFormat.heightDots == 288, "36 mm label height has wrong 203 dpi conversion")
+    try require(!LabelFormat.letterPresets.contains(.shipping100x150), "Shipping format leaked into letter presets")
+    try require(LabelFormat.letterPresets.first == .address89x36, "Default letter preset is not 89 × 36 mm")
+    try require(
+        LabelFormat.normalizedLetterFormatID(LabelFormat.shipping100x150.id) == LabelFormat.address89x36.id,
+        "Legacy 100 × 150 mm letter format was not migrated"
+    )
     let clampedFormat = LabelFormat.custom(widthMM: 500, heightMM: 2)
     try require(clampedFormat.widthMM == 108 && clampedFormat.heightMM == 15, "Custom label bounds failed")
 
@@ -102,7 +108,7 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 29 checks passed")
+    print("LabelCoreSelfTest: 32 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)

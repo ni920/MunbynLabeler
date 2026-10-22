@@ -12,8 +12,8 @@ struct LabelFormatControls: View {
                     .font(.headline)
             }
 
-            Picker("Format", selection: $appStore.selectedFormatID) {
-                ForEach(LabelFormat.presets) { format in
+            Picker("Format", selection: $appStore.letterFormatID) {
+                ForEach(LabelFormat.letterPresets) { format in
                     Text(format.name).tag(format.id)
                 }
                 Divider()
@@ -22,7 +22,7 @@ struct LabelFormatControls: View {
             .labelsHidden()
             .frame(maxWidth: 320)
 
-            if appStore.selectedFormatID == "custom" {
+            if appStore.letterFormatID == "custom" {
                 HStack(spacing: 18) {
                     Stepper(
                         "Breite: \(Int(appStore.customWidthMM.rounded())) mm",
@@ -39,7 +39,7 @@ struct LabelFormatControls: View {
                 }
             }
 
-            Text("\(appStore.selectedLabelFormat.technicalDescription) · 203 dpi")
+            Text("\(appStore.selectedLetterLabelFormat.technicalDescription) · 203 dpi")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
