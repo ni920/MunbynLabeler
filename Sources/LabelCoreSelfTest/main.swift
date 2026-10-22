@@ -85,7 +85,6 @@ do {
     let browserOrder = BrowserOrderPayload(
         orderID: "987654321",
         recipient: etsyOrders[0].recipientAddress,
-        items: [.init(title: "Größe L – Weiß", quantity: 2)],
         sourceURL: "https://www.etsy.com/your/orders/987654321"
     )
     let browserURL = try BrowserOrderLink.makeURL(for: browserOrder)
@@ -93,7 +92,7 @@ do {
     let decodedBrowserOrder = try BrowserOrderLink.decode(browserURL)
     try require(decodedBrowserOrder == browserOrder, "Browser order URL round trip failed")
     try require(decodedBrowserOrder.recipient.name == "Mia Muster", "Browser recipient was not preserved")
-    try require(decodedBrowserOrder.items.first?.quantity == 2, "Browser item quantity was not preserved")
+    try require(decodedBrowserOrder.sourceURL == browserOrder.sourceURL, "Browser source URL was not preserved")
 
     let legacyJobJSON = """
     {"id":"00000000-0000-0000-0000-000000000001","sourceURL":"file:///tmp/label.pdf","sourceFingerprint":"legacy","createdAt":0,"status":"ready"}

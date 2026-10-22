@@ -32,24 +32,6 @@ struct BrowserOrderReviewView: View {
                     .padding(.vertical, 4)
                 }
 
-                if !order.items.isEmpty {
-                    GroupBox("Artikel") {
-                        VStack(alignment: .leading, spacing: 7) {
-                            ForEach(order.items.prefix(8)) { item in
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(item.title)
-                                        .lineLimit(2)
-                                    Spacer()
-                                    Text("× \(item.quantity)")
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
-                    }
-                }
-
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Was möchtest du versenden?")
                         .font(.headline)

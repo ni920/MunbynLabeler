@@ -156,12 +156,6 @@ struct ShippingFormView: View {
                             .font(.headline)
                         Text(order.recipient.singleLine)
                             .foregroundStyle(.secondary)
-                        if !order.items.isEmpty {
-                            Text(order.items.map { "\($0.quantity)× \($0.title)" }.joined(separator: " · "))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
                     }
                     Spacer()
                 }

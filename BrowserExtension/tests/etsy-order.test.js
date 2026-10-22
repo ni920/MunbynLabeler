@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const {
   buildAppURL,
   findAddressInData,
-  findItemsInData,
   findOrderIDInData,
   isCompleteAddress,
   parseAddressLines
@@ -31,7 +30,7 @@ test("parses a German shipping address block", () => {
   assert.equal(isCompleteAddress(address), true);
 });
 
-test("finds order, address and items in nested Etsy data", () => {
+test("finds order and address in nested Etsy data", () => {
   const data = {
     receipt: {
       receipt_id: 1234567890,
@@ -50,10 +49,9 @@ test("finds order, address and items in nested Etsy data", () => {
   };
   assert.equal(findOrderIDInData(data), "1234567890");
   assert.equal(findAddressInData(data).street1, "Hauptstraße 1");
-  assert.deepEqual(findItemsInData(data), [{ title: "Schmuckschatulle", quantity: 2 }]);
 });
 
-test("builds a URL-safe app link with Unicode data", () => {
+test("builds a URL-safe app link without transferring item data", () => {
   const url = buildAppURL({
     version: 1,
     orderID: "123",
@@ -70,4 +68,8 @@ test("builds a URL-safe app link with Unicode data", () => {
     sourceURL: "https://www.etsy.com/your/orders/123"
   });
   assert.match(url, /^munbyn-labeler:\/\/etsy-order\?payload=[A-Za-z0-9_-]+$/);
+  const encoded = new URL(url).searchParams.get("payload");
+  const decoded = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+  assert.equal(decoded.recipient.name, "Mia Müller");
+  assert.equal("items" in decoded, false);
 });

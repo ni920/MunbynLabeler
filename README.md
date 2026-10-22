@@ -160,9 +160,9 @@ The first Bluetooth scan triggers the macOS Bluetooth permission dialog. The app
 
 Die Erweiterung ergänzt eine geöffnete Etsy-Bestellung um den Button
 **An Munbyn Labeler senden**. Nach dem Klick öffnet macOS die lokal installierte
-App. Dort werden Bestellnummer, Empfänger und erkannte Artikel angezeigt und
-erst nach der Auswahl **Brief** oder **Paket** übernommen. Es wird niemals
-automatisch gedruckt.
+App. Dort werden nur Bestellnummer und Empfänger angezeigt und erst nach der
+Auswahl **Brief** oder **Paket** übernommen. Artikeldaten werden weder ausgelesen
+noch an die App übertragen. Es wird niemals automatisch gedruckt.
 
 Die Daten werden ausschließlich über den lokalen App-Link
 `munbyn-labeler://etsy-order` übertragen. Ein externer Server ist nicht

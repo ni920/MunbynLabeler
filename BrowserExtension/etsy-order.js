@@ -107,26 +107,6 @@
     return result;
   }
 
-  function findItemsInData(data) {
-    const items = [];
-    const seen = new Set();
-    walkJSON(data, (value, path) => {
-      if (Array.isArray(value) || items.length >= 20) return;
-      const pathText = path.join("/");
-      if (!/(transaction|listing|lineitem|line_item|items)/i.test(pathText)) return;
-      const title = objectValue(value, ["title", "listing_title", "product_name", "name"]);
-      const quantityText = objectValue(value, ["quantity", "qty"]);
-      const identity = objectValue(value, ["transaction_id", "listing_id", "product_id"]);
-      if (!title || (!quantityText && !identity)) return;
-      const quantity = Math.max(1, Number.parseInt(quantityText || "1", 10) || 1);
-      const key = `${title.toLowerCase()}|${quantity}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      items.push({ title, quantity });
-    });
-    return items;
-  }
-
   function parseAddressLines(rawLines) {
     const lines = rawLines
       .map(clean)
@@ -210,21 +190,6 @@
     return null;
   }
 
-  function itemsFromDocument(document) {
-    const items = [];
-    const seen = new Set();
-    for (const link of document.querySelectorAll('a[href*="/listing/"]')) {
-      const title = clean(link.getAttribute("aria-label") || link.textContent);
-      if (!title || title.length < 3 || seen.has(title.toLowerCase())) continue;
-      const containerText = clean(link.closest("li,article,[data-transaction-id],div")?.innerText || "");
-      const quantityMatch = containerText.match(/(?:menge|quantity|qty)\s*:?\s*(\d+)/i);
-      seen.add(title.toLowerCase());
-      items.push({ title, quantity: Math.max(1, Number.parseInt(quantityMatch?.[1] || "1", 10)) });
-      if (items.length >= 20) break;
-    }
-    return items;
-  }
-
   function orderIDFromPage(url, text, dataDocuments) {
     for (const data of dataDocuments) {
       const result = findOrderIDInData(data);
@@ -242,19 +207,15 @@
   function extractOrder(document, url = document.location.href) {
     const documents = jsonDocuments(document);
     let recipient = null;
-    let items = [];
     for (const data of documents) {
       if (!recipient) recipient = findAddressInData(data);
-      if (items.length === 0) items = findItemsInData(data);
     }
     if (!isCompleteAddress(recipient)) recipient = addressFromDocument(document);
-    if (items.length === 0) items = itemsFromDocument(document);
 
     return {
       version: 1,
       orderID: orderIDFromPage(url, String(document.body?.innerText || ""), documents),
       recipient: recipient || { name: "", street1: "", street2: "", postalCode: "", city: "", state: "", country: "" },
-      items,
       sourceURL: url
     };
   }
@@ -267,14 +228,19 @@
   }
 
   function buildAppURL(payload) {
-    return `munbyn-labeler://etsy-order?payload=${base64URL(JSON.stringify(payload))}`;
+    const appPayload = {
+      version: payload.version,
+      orderID: payload.orderID,
+      recipient: payload.recipient,
+      sourceURL: payload.sourceURL
+    };
+    return `munbyn-labeler://etsy-order?payload=${base64URL(JSON.stringify(appPayload))}`;
   }
 
   return {
     buildAppURL,
     extractOrder,
     findAddressInData,
-    findItemsInData,
     findOrderIDInData,
     isCompleteAddress,
     parseAddressLines

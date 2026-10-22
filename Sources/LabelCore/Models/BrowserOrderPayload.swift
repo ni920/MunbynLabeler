@@ -1,35 +1,20 @@
 import Foundation
 
 public struct BrowserOrderPayload: Codable, Equatable, Sendable {
-    public struct Item: Codable, Equatable, Sendable, Identifiable {
-        public let title: String
-        public let quantity: Int
-
-        public var id: String { "\(title)|\(quantity)" }
-
-        public init(title: String, quantity: Int = 1) {
-            self.title = title
-            self.quantity = max(1, quantity)
-        }
-    }
-
     public let version: Int
     public let orderID: String
     public let recipient: RecipientAddress
-    public let items: [Item]
     public let sourceURL: String?
 
     public init(
         version: Int = 1,
         orderID: String,
         recipient: RecipientAddress,
-        items: [Item] = [],
         sourceURL: String? = nil
     ) {
         self.version = version
         self.orderID = orderID
         self.recipient = recipient
-        self.items = items
         self.sourceURL = sourceURL
     }
 }
