@@ -189,7 +189,7 @@ final class AppStore: ObservableObject {
         bluetooth.printRaster(LabelRenderer.testPattern(format: selectedLabelFormat)) { [weak self] result in
             switch result {
             case .success:
-                self?.lastMessage = "Testetikett wurde vollständig vom RW403B bestätigt."
+                self?.lastMessage = "Testetikett wurde vom RW403B gedruckt."
             case .failure(let error):
                 self?.lastMessage = "Testdruck fehlgeschlagen: \(error.localizedDescription)"
             }
@@ -212,7 +212,7 @@ final class AppStore: ObservableObject {
                 switch result {
                 case .success:
                     self.jobs.update(job.id, status: .printed)
-                    self.lastMessage = "Etikett wurde vollständig vom RW403B bestätigt."
+                    self.lastMessage = "Etikett wurde vom RW403B gedruckt."
                 case .failure(let error):
                     self.jobs.update(job.id, status: .failed, errorMessage: error.localizedDescription)
                     self.lastMessage = "Druck fehlgeschlagen: \(error.localizedDescription)"

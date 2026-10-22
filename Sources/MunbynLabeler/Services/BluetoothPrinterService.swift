@@ -56,6 +56,7 @@ enum BluetoothPrinterError: LocalizedError {
     case emptyPrintData
     case frameTooLarge(Int, Int)
     case responseTimeout(Int)
+    case printCompletionTimeout
     case printerNotReady(String)
     case printerRejected(String)
 
@@ -69,6 +70,8 @@ enum BluetoothPrinterError: LocalizedError {
             "Ein Bluetooth-Paket ist mit \(actual) Bytes größer als die erlaubten \(maximum) Bytes."
         case .responseTimeout(let section):
             "Der Drucker hat Datenabschnitt \(section) nicht bestätigt."
+        case .printCompletionTimeout:
+            "Der RW403B hat den abgeschlossenen Druck nicht bestätigt."
         case .printerNotReady(let detail): "Der RW403B ist nicht druckbereit: \(detail)"
         case .printerRejected(let detail): "Der Drucker hat den Auftrag abgelehnt: \(detail)"
         }
@@ -85,7 +88,7 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     private enum PrintPhase {
         case sending
         case waitingForSectionAck
-        case ending
+        case waitingForPrintCompletion
     }
 
     private struct PrintTransfer {
@@ -118,6 +121,7 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     private var connectionHandshakePending = false
     private var connectionHandshakeTimeout: DispatchWorkItem?
     private var sectionAckTimeout: DispatchWorkItem?
+    private var printCompletionTimeout: DispatchWorkItem?
     private var pacedWrite: DispatchWorkItem?
 
     override init() {
@@ -313,12 +317,13 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
                 finishTransfer(.failure(BluetoothPrinterError.notConnected))
                 return
             }
-            transfer.phase = .ending
+            transfer.phase = .waitingForPrintCompletion
             activeTransfer = .print(transfer)
             transferProgress = Double(transfer.totalFrames) / Double(max(1, transfer.totalFrames + 1))
             let frame = MunbynRW403BProtocol.printEndFrame()
-            diagnostics.append("Alle Abschnitte bestätigt; Druckende über ABF1")
+            diagnostics.append("Alle Abschnitte bestätigt; Druckende über ABF1, warte auf Druckstatus")
             peripheral.writeValue(frame, for: controlCharacteristic, type: .withResponse)
+            waitForPrintCompletion()
         } else {
             transfer.phase = .sending
             activeTransfer = .print(transfer)
@@ -342,6 +347,17 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
                 latestPrintStatus = printStatus
                 printerStatusMessage = printStatus == 0 ? nil : statusDescription(printStatus)
                 refreshReadyConnectionStatus()
+                if case .print(let transfer) = activeTransfer,
+                   transfer.phase == .waitingForPrintCompletion {
+                    if printStatus == 0 {
+                        diagnostics.append("RW403B meldet: Etikett gedruckt")
+                        finishTransfer(.success(()))
+                    } else {
+                        finishTransfer(.failure(
+                            BluetoothPrinterError.printerNotReady(statusDescription(printStatus))
+                        ))
+                    }
+                }
             }
         case .sectionAccepted:
             acceptCurrentSection()
@@ -354,8 +370,10 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
 
     private func finishTransfer(_ result: Result<Void, Error>) {
         sectionAckTimeout?.cancel()
+        printCompletionTimeout?.cancel()
         pacedWrite?.cancel()
         sectionAckTimeout = nil
+        printCompletionTimeout = nil
         pacedWrite = nil
 
         let completion: ((Result<Void, Error>) -> Void)?
@@ -366,8 +384,20 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
         }
         activeTransfer = nil
         transferProgress = result.isSuccess ? 1 : 0
-        diagnostics.append(result.isSuccess ? "Druckdaten vom RW403B bestätigt" : "Druckübertragung abgebrochen")
+        diagnostics.append(result.isSuccess ? "Druck vom RW403B abgeschlossen" : "Druckübertragung abgebrochen")
         completion?(result)
+    }
+
+    private func waitForPrintCompletion() {
+        printCompletionTimeout?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  case .print(let transfer) = self.activeTransfer,
+                  transfer.phase == .waitingForPrintCompletion else { return }
+            self.finishTransfer(.failure(BluetoothPrinterError.printCompletionTimeout))
+        }
+        printCompletionTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
     }
 
     private func readyPeripheral() -> CBPeripheral? {
@@ -610,8 +640,8 @@ extension BluetoothPrinterService: CBPeripheralDelegate {
         switch activeTransfer {
         case .selfTest:
             finishTransfer(.success(()))
-        case .print(let transfer) where transfer.phase == .ending:
-            finishTransfer(.success(()))
+        case .print(let transfer) where transfer.phase == .waitingForPrintCompletion:
+            diagnostics.append("Druckende vom Bluetooth-Kanal angenommen")
         default:
             break
         }

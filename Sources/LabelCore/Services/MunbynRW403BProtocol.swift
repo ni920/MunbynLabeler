@@ -37,11 +37,16 @@ public enum MunbynRW403BProtocol {
 
         let wholeCompressedLength = HeatshrinkCodec.compress(raster.bitmap).count
         let baseSectionLength = wholeCompressedLength > 30_720 ? 4_608 : 8_192
-        let alignment = max(1, raster.bytesPerRow)
+        // The official RW403B editor aligns compressed sections to the
+        // uncompressed pixel width and sends the label width in millimetres.
+        // Sending the dot width here (for example 800 instead of 100) makes
+        // the printer acknowledge every section but discard the finished job.
+        let alignment = max(1, raster.width)
         let sectionLength = max(alignment, baseSectionLength - baseSectionLength % alignment)
         let sourceSections = raster.bitmap.chunked(maximumLength: sectionLength)
         let totalSections = sourceSections.count
         let imageChunkLength = max(20, min(400, maximumImageChunkLength))
+        let printerWidthMM = max(1, Int((Double(raster.width) / 8.0).rounded()))
 
         return sourceSections.enumerated().map { sectionOffset, source in
             let compressed = HeatshrinkCodec.compress(source)
@@ -53,7 +58,7 @@ public enum MunbynRW403BProtocol {
                     dataLength: raster.bitmap.count,
                     totalPackages: imageChunks.count,
                     packageIndex: packetOffset + 1,
-                    width: packetOffset == 0 ? raster.width : 0,
+                    width: packetOffset == 0 ? printerWidthMM : 0,
                     totalSections: totalSections,
                     compression: 1,
                     sectionLength: compressed.count,

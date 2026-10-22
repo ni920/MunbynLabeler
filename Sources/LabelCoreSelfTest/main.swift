@@ -15,6 +15,56 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     guard condition() else { throw SelfTestFailure.assertion(message) }
 }
 
+func readVarint(_ data: Data, offset: inout Int) -> UInt64? {
+    var value: UInt64 = 0
+    var shift: UInt64 = 0
+    while offset < data.count, shift < 64 {
+        let byte = data[offset]
+        offset += 1
+        value |= UInt64(byte & 0x7F) << shift
+        if byte & 0x80 == 0 { return value }
+        shift += 7
+    }
+    return nil
+}
+
+func protobufBytesField(_ number: Int, in data: Data) -> Data? {
+    var offset = 0
+    while offset < data.count, let key = readVarint(data, offset: &offset) {
+        let field = Int(key >> 3)
+        let wire = Int(key & 0x07)
+        if wire == 0 {
+            _ = readVarint(data, offset: &offset)
+        } else if wire == 2, let rawLength = readVarint(data, offset: &offset) {
+            let length = Int(rawLength)
+            guard offset + length <= data.count else { return nil }
+            let value = data.subdata(in: offset..<(offset + length))
+            offset += length
+            if field == number { return value }
+        } else {
+            return nil
+        }
+    }
+    return nil
+}
+
+func protobufVarintField(_ number: Int, in data: Data) -> UInt64? {
+    var offset = 0
+    while offset < data.count, let key = readVarint(data, offset: &offset) {
+        let field = Int(key >> 3)
+        let wire = Int(key & 0x07)
+        if wire == 0, let value = readVarint(data, offset: &offset) {
+            if field == number { return value }
+        } else if wire == 2, let rawLength = readVarint(data, offset: &offset) {
+            offset += Int(rawLength)
+            guard offset <= data.count else { return nil }
+        } else {
+            return nil
+        }
+    }
+    return nil
+}
+
 do {
     let bitmap = Data([0xAA, 0x55, 0xF0, 0x0F])
     let raster = LabelRaster(width: 16, height: 2, bytesPerRow: 2, bitmap: bitmap)
@@ -52,7 +102,18 @@ do {
     try require(!sections.isEmpty, "RW403B raster produced no sections")
     try require(sections.allSatisfy { !$0.frames.isEmpty }, "RW403B raster section has no frames")
     var printFrameDecoder = MunbynFrameDecoder()
-    try require(printFrameDecoder.append(sections[0].frames[0]).count == 1, "RW403B print frame is invalid")
+    let printPayloads = printFrameDecoder.append(sections[0].frames[0])
+    try require(printPayloads.count == 1, "RW403B print frame is invalid")
+    let printMessage = protobufBytesField(5, in: printPayloads[0])
+    try require(
+        printMessage.flatMap { protobufVarintField(6, in: $0) } == 2,
+        "RW403B print width must be millimetres, not dot width"
+    )
+    let completedPrintReport = Data([0x08, 0x06, 0x1A, 0x05, 0x08, 0x0A, 0x12, 0x01, 0x30])
+    try require(
+        MunbynRW403BProtocol.parseResponse(completedPrintReport) == .printStatus("0"),
+        "RW403B completed-print report was not recognized"
+    )
 
     let addressFormat = LabelFormat.address89x36
     try require(addressFormat.widthDots == 712, "89 mm label width has wrong 8 dots/mm conversion")
@@ -117,7 +178,7 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 36 checks passed")
+    print("LabelCoreSelfTest: 38 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)
