@@ -7,6 +7,7 @@
 
   const ADDRESS_LABELS = [
     "versandadresse",
+    "versand an",
     "lieferadresse",
     "empfänger",
     "empfaenger",

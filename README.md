@@ -176,7 +176,8 @@ beteiligt. Der Absender wird nicht aus Etsy übernommen, sondern einmalig unter
 2. `chrome://extensions` öffnen und **Entwicklermodus** aktivieren.
 3. **Entpackte Erweiterung laden** wählen.
 4. Den entpackten Ordner `BrowserExtension` auswählen.
-5. Eine Etsy-Bestellung mit sichtbarer Versandadresse öffnen und
+5. Eine Etsy-Bestellung öffnen, sodass rechts das Bestellpanel mit
+   **Versand an** und der vollständigen Adresse sichtbar ist, und
    **An Munbyn Labeler senden** anklicken.
 
 ### Safari

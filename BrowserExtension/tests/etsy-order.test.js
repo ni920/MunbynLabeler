@@ -30,6 +30,27 @@ test("parses a German shipping address block", () => {
   assert.equal(isCompleteAddress(address), true);
 });
 
+test("parses the visible Etsy order-panel address headed by Versand an", () => {
+  const address = parseAddressLines([
+    "Versand an",
+    "Mia Muster",
+    "Hauptstraße 1",
+    "66740 Saarlouis",
+    "Deutschland",
+    "+491701234567"
+  ]);
+  assert.deepEqual(address, {
+    name: "Mia Muster",
+    street1: "Hauptstraße 1",
+    street2: "",
+    postalCode: "66740",
+    city: "Saarlouis",
+    state: "",
+    country: "Deutschland"
+  });
+  assert.equal(isCompleteAddress(address), true);
+});
+
 test("finds order and address in nested Etsy data", () => {
   const data = {
     receipt: {
