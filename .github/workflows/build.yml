@@ -1,0 +1,52 @@
+name: Build macOS app
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Universal app
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Run protocol self-test
+        run: swift run LabelCoreSelfTest
+
+      - name: Build Universal 2 app
+        run: ./script/build_and_run.sh build
+
+      - name: Verify bundle
+        run: |
+          APP_BINARY="dist/MunbynLabeler.app/Contents/MacOS/MunbynLabeler"
+          lipo "$APP_BINARY" -verify_arch arm64
+          lipo "$APP_BINARY" -verify_arch x86_64
+          codesign --verify --deep --strict dist/MunbynLabeler.app
+          test -f dist/MunbynLabeler.app/Contents/Resources/AppIcon.icns
+
+      - name: Package build artifact
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/MunbynLabeler.app \
+            dist/MunbynLabeler-universal.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MunbynLabeler-universal
+          path: dist/MunbynLabeler-universal.zip
+          if-no-files-found: error
+          retention-days: 14
