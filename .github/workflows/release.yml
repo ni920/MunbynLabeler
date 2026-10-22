@@ -1,0 +1,53 @@
+name: Release macOS app
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Universal app
+    runs-on: macos-15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Run protocol self-test
+        run: swift run LabelCoreSelfTest
+
+      - name: Build Universal 2 app
+        run: ./script/build_and_run.sh build
+
+      - name: Verify bundle
+        run: |
+          APP_BINARY="dist/MunbynLabeler.app/Contents/MacOS/MunbynLabeler"
+          lipo "$APP_BINARY" -verify_arch arm64
+          lipo "$APP_BINARY" -verify_arch x86_64
+          codesign --verify --deep --strict dist/MunbynLabeler.app
+          test -f dist/MunbynLabeler.app/Contents/Resources/AppIcon.icns
+
+      - name: Package release
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/MunbynLabeler.app \
+            dist/MunbynLabeler-universal.zip
+          cd dist
+          shasum -a 256 MunbynLabeler-universal.zip \
+            > MunbynLabeler-universal.zip.sha256
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/MunbynLabeler-universal.zip \
+            dist/MunbynLabeler-universal.zip.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "Munbyn Labeler $GITHUB_REF_NAME"

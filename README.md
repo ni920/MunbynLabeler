@@ -18,7 +18,8 @@ Für beide Prozessorarten wird dieselbe Universal-App verwendet.
 
 ### Installation aus dem ZIP-Archiv
 
-1. `MunbynLabeler-universal.zip` entpacken.
+1. Unter [GitHub Releases](https://github.com/ni920/MunbynLabeler/releases/latest)
+   die Datei `MunbynLabeler-universal.zip` herunterladen und entpacken.
 2. `MunbynLabeler.app` in den macOS-Ordner **Programme** ziehen.
 3. **Munbyn Labeler** aus dem Programme-Ordner öffnen.
 4. Beim ersten Druckerversuch den Bluetooth-Zugriff erlauben.
@@ -134,12 +135,14 @@ Verify both architectures, the signature and a local launch with:
 ## Continuous integration
 
 `.github/workflows/build.yml` builds and verifies the Universal 2 app on a
-macOS runner. Successful runs retain a zipped app bundle as a private workflow
-artifact for 14 days.
+macOS runner. Successful runs retain a zipped app bundle as a workflow artifact
+for 14 days.
 
-The workflow deliberately does not create a GitHub Release, upload to the App
-Store, notarize the app or publish it anywhere. Distribution remains a separate
-manual decision.
+Pushing a version tag such as `v0.2.0` starts
+`.github/workflows/release.yml`. That workflow repeats the tests and Universal
+build, verifies the bundle, and publishes the ZIP plus its SHA-256 checksum as
+a permanent GitHub Release. The release is ad-hoc signed and not Apple-notarized;
+it is not uploaded to the App Store.
 
 The repository also contains a dependency-free protocol self-test:
 
