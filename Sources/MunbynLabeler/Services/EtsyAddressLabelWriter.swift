@@ -9,8 +9,8 @@ enum EtsyAddressLabelWriterError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .cannotCreateDirectory: "Der Ordner für Etsy-Adressetiketten konnte nicht erstellt werden."
-        case .cannotCreateDocument: "Das Etsy-Adressetikett konnte nicht erzeugt werden."
+        case .cannotCreateDirectory: "Der Ordner für Adressetiketten konnte nicht erstellt werden."
+        case .cannotCreateDocument: "Das Adressetikett konnte nicht erzeugt werden."
         }
     }
 }
@@ -22,19 +22,53 @@ enum EtsyAddressLabelWriter {
         format: LabelFormat,
         fileManager: FileManager = .default
     ) throws -> URL {
+        try write(
+            recipient: order.recipientAddress,
+            sender: sender,
+            format: format,
+            filenamePrefix: "Etsy-\(order.id)",
+            footer: "Etsy #\(order.id)",
+            fileManager: fileManager
+        )
+    }
+
+    static func write(
+        recipient: RecipientAddress,
+        sender: SenderAddress,
+        format: LabelFormat,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        try write(
+            recipient: recipient,
+            sender: sender,
+            format: format,
+            filenamePrefix: "Adresse-\(UUID().uuidString)",
+            footer: nil,
+            fileManager: fileManager
+        )
+    }
+
+    private static func write(
+        recipient: RecipientAddress,
+        sender: SenderAddress,
+        format: LabelFormat,
+        filenamePrefix: String,
+        footer: String?,
+        fileManager: FileManager
+    ) throws -> URL {
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let directory = base
             .appendingPathComponent("MunbynLabeler", isDirectory: true)
-            .appendingPathComponent("Etsy Labels", isDirectory: true)
+            .appendingPathComponent("Address Labels", isDirectory: true)
         do {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
             throw EtsyAddressLabelWriterError.cannotCreateDirectory
         }
 
-        let safeID = sanitizedFilename(order.id)
-        let safeName = sanitizedFilename(order.recipientName)
-        let url = directory.appendingPathComponent("Etsy-\(safeID)-\(safeName).pdf")
+        let safePrefix = sanitizedFilename(filenamePrefix)
+        let safeName = sanitizedFilename(recipient.name)
+        let url = directory.appendingPathComponent("\(safePrefix)-\(safeName).pdf")
         let pointsPerMillimeter = 72.0 / 25.4
         var mediaBox = CGRect(
             x: 0,
@@ -74,23 +108,25 @@ enum EtsyAddressLabelWriter {
         context.addLine(to: CGPoint(x: mediaBox.width - margin, y: separatorY))
         context.strokePath()
 
-        let footerHeight = max(8, mediaBox.height * 0.08)
+        let footerHeight = footer == nil ? 0 : max(8, mediaBox.height * 0.08)
         let recipientRect = CGRect(
             x: margin,
             y: margin + footerHeight,
             width: mediaBox.width - 2 * margin,
             height: max(20, separatorY - margin - footerHeight - 6)
         )
-        drawRecipient(order.recipientLines.joined(separator: "\n"), in: recipientRect, context: context)
+        drawRecipient(recipient.lines.joined(separator: "\n"), in: recipientRect, context: context)
 
-        drawLine(
-            "Etsy #\(order.id)",
-            in: CGRect(x: margin, y: margin, width: mediaBox.width - 2 * margin, height: footerHeight),
-            font: NSFont.systemFont(ofSize: max(5.5, min(8, footerHeight * 0.65))),
-            context: context,
-            alignment: .right,
-            truncate: true
-        )
+        if let footer {
+            drawLine(
+                footer,
+                in: CGRect(x: margin, y: margin, width: mediaBox.width - 2 * margin, height: footerHeight),
+                font: NSFont.systemFont(ofSize: max(5.5, min(8, footerHeight * 0.65))),
+                context: context,
+                alignment: .right,
+                truncate: true
+            )
+        }
 
         context.endPDFPage()
         context.closePDF()

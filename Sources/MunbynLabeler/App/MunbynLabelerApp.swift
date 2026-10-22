@@ -32,7 +32,7 @@ struct MunbynLabelerApp: App {
                 }
                 .keyboardShortcut("r")
 
-                Button("Etsy-Bestellungen importieren …") {
+                Button("Etsy-Adresse aus CSV übernehmen …") {
                     appStore.showEtsyImporter = true
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])

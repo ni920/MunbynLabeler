@@ -1,6 +1,7 @@
 # Munbyn Labeler
 
-Native macOS app for sending 4 × 6 inch labels to a MUNBYN RW403B over Bluetooth.
+Native macOS app for preparing address and parcel labels and sending them to a
+MUNBYN RW403B over Bluetooth.
 
 The packaged app is a Universal 2 application containing native `arm64` and
 `x86_64` binaries. It runs on Apple Silicon and Intel Macs with macOS 14 or
@@ -162,17 +163,27 @@ Neben den fünf Vorlagen kann **Eigenes Format** gewählt werden. Die Breite ist
 auf den Druckbereich des RW403B von maximal 108 mm begrenzt. PDF- und
 Bildinhalte werden proportional eingepasst und nicht verzerrt.
 
-## Etsy-Bestellungen importieren
+## Brief oder Paket vorbereiten
 
-1. In Etsy **Shop-Manager → Einstellungen → Optionen → Daten herunterladen**
-   öffnen.
-2. Unter **Bestellungen** als CSV-Typ **Bestellungen** wählen, Zeitraum angeben
-   und **CSV herunterladen** auswählen.
-3. In Munbyn Labeler **Etsy-Bestellungen …** anklicken und diese CSV öffnen.
-4. Die gewünschten Bestellungen markieren.
-5. **Brief / Adressetikett** oder **DHL-Paketlabel** auswählen.
-6. Für ein Briefetikett den Absender ergänzen, das Etikettenformat wählen und
-   die Etiketten erzeugen. Sie erscheinen danach in der Warteschlange.
+Auf der Seite **Drucken** wird zuerst **Brief** oder **Paket** gewählt.
+
+Für einen Brief:
+
+1. Empfänger und Absender direkt in das Formular eintragen.
+2. Das passende Etikettenformat auswählen.
+3. **Adressetikett erstellen** auswählen.
+4. Das erzeugte Etikett drucken.
+
+Für ein Paket:
+
+1. Das Versandlabel bei DHL kaufen und als PDF herunterladen.
+2. **DHL-PDF auswählen …** anklicken.
+3. Das importierte 100 × 150-mm-Label drucken.
+
+Der Etsy-CSV-Import ist optional. Mit **Aus Etsy-CSV übernehmen …** kann die
+Empfängeradresse einer Bestellung ins Brief-Formular übernommen werden. Dazu in
+Etsy **Shop-Manager → Einstellungen → Optionen → Daten herunterladen** öffnen,
+unter **Bestellungen** den CSV-Typ **Bestellungen** wählen und die Datei laden.
 
 Die aktuelle Etsy-Anleitung für den Export befindet sich unter
 [How Do I Download My Etsy Data?](https://help.etsy.com/hc/en-us/articles/360035753053-How-Do-I-Download-My-Etsy-Data).
@@ -183,7 +194,7 @@ werden. Etsy-CSV und erzeugte Adressetiketten werden ausschließlich lokal
 verarbeitet. Die PDFs liegen unter:
 
 ```text
-~/Library/Application Support/MunbynLabeler/Etsy Labels/
+~/Library/Application Support/MunbynLabeler/Address Labels/
 ```
 
 ## First printer test

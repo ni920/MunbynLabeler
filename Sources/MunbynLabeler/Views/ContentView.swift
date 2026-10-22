@@ -83,7 +83,7 @@ struct ContentView: View {
                     Button("PDF oder Bild …") {
                         appStore.showImporter = true
                     }
-                    Button("Etsy-Bestellungen (CSV) …") {
+                    Button("Etsy-Adresse aus CSV …") {
                         appStore.showEtsyImporter = true
                     }
                 } label: {

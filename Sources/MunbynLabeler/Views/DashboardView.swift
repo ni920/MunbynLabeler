@@ -20,8 +20,10 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 connectionCard
-                formatCard
-                importCard
+                ShippingFormView(appStore: appStore)
+                if let selectedJob {
+                    readyLabelCard(selectedJob)
+                }
                 if let message = appStore.lastMessage {
                     Label(message, systemImage: "info.circle")
                         .font(.callout)
@@ -35,24 +37,11 @@ struct DashboardView: View {
         .navigationTitle("Drucken")
     }
 
-    private var formatCard: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "rectangle.and.pencil.and.ellipsis")
-                .font(.system(size: 22))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 34)
-            LabelFormatControls(appStore: appStore)
-            Spacer()
-        }
-        .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-
     private var header: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Etiketten ohne Umweg")
                 .font(.system(size: 30, weight: .semibold, design: .rounded))
-            Text("Format wählen und Etsy-Bestellungen, PDF oder Bild direkt per Bluetooth drucken.")
+            Text("Briefadresse eingeben oder ein fertiges DHL-Paketlabel auswählen und direkt drucken.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
@@ -117,69 +106,36 @@ struct DashboardView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private var importCard: some View {
-        VStack(spacing: 18) {
-            if let job = selectedJob {
-                HStack(spacing: 18) {
-                    preview(for: job.sourceURL)
-                        .frame(width: 150, height: 190)
+    private func readyLabelCard(_ job: PrintJob) -> some View {
+        HStack(spacing: 18) {
+            preview(for: job.sourceURL)
+                .frame(width: 130, height: 160)
 
-                    VStack(alignment: .leading, spacing: 9) {
-                        Text(job.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                        Text("\(job.resolvedLabelFormat.sizeDescription) · 203 dpi · \(job.status.label)")
-                            .foregroundStyle(.secondary)
-                        if let error = job.errorMessage {
-                            Text(error)
-                                .foregroundStyle(.red)
-                                .font(.callout)
-                        }
-                        HStack {
-                            Button("Etikett drucken") {
-                                appStore.printJob(job)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(!bluetooth.connectionState.isReady || job.status == .printing)
-
-                            Button("Andere Datei …") {
-                                appStore.showImporter = true
-                            }
-                        }
-                    }
-                    Spacer()
-                }
-            } else {
-                Image(systemName: "doc.badge.plus")
-                    .font(.system(size: 36, weight: .light))
+            VStack(alignment: .leading, spacing: 9) {
+                Label("Druckbereit", systemImage: "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                Text(job.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text("\(job.resolvedLabelFormat.sizeDescription) · 203 dpi · \(job.status.label)")
                     .foregroundStyle(.secondary)
-                Text("PDF, Bild oder Etsy-CSV hier ablegen")
-                    .font(.title3.weight(.medium))
-                Text("Dateien werden auf das gewählte Format eingepasst. Etsy-CSV-Dateien öffnen die Bestellauswahl.")
-                    .foregroundStyle(.secondary)
-                HStack {
-                    Button("PDF oder Bild …") {
-                        appStore.showImporter = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    Button("Etsy-Bestellungen …") {
-                        appStore.showEtsyImporter = true
-                    }
+                if let error = job.errorMessage {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.callout)
                 }
+                Button("Etikett drucken") {
+                    appStore.printJob(job)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!bluetooth.connectionState.isReady || job.status == .printing)
             }
+            Spacer()
         }
-        .frame(maxWidth: .infinity, minHeight: 250)
-        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 16))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [7]))
-                .foregroundStyle(.tertiary)
-        }
-        .dropDestination(for: URL.self) { urls, _ in
-            appStore.importFiles(urls)
-            return !urls.isEmpty
-        }
     }
 
     @ViewBuilder

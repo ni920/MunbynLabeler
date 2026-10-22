@@ -70,6 +70,17 @@ do {
     try require(etsyOrders[0].recipientName == "Mia Muster", "Etsy recipient name was not parsed")
     try require(etsyOrders[1].street1 == "12 Market Street, South", "Quoted Etsy address was not parsed")
     try require(etsyOrders[0].recipientLines.contains("66740 Saarlouis"), "Etsy locality formatting failed")
+    try require(etsyOrders[0].recipientAddress.isComplete, "Imported recipient address should be complete")
+    try require(etsyOrders[0].recipientAddress.lines.first == "Mia Muster", "Recipient address lines are wrong")
+
+    let incompleteRecipient = RecipientAddress(
+        name: "",
+        street1: "Hauptstraße 1",
+        postalCode: "66740",
+        city: "Saarlouis",
+        country: "Deutschland"
+    )
+    try require(!incompleteRecipient.isComplete, "Incomplete recipient address was accepted")
 
     let legacyJobJSON = """
     {"id":"00000000-0000-0000-0000-000000000001","sourceURL":"file:///tmp/label.pdf","sourceFingerprint":"legacy","createdAt":0,"status":"ready"}
@@ -79,7 +90,7 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 22 checks passed")
+    print("LabelCoreSelfTest: 25 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)

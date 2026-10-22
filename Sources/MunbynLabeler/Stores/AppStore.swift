@@ -10,6 +10,9 @@ final class AppStore: ObservableObject {
     @Published var showEtsyImportError = false
     @Published var lastMessage: String?
     @Published var selectedJobID: UUID?
+    @Published var selectedShipmentKind: ShipmentKind {
+        didSet { defaults.set(selectedShipmentKind.rawValue, forKey: Keys.selectedShipmentKind) }
+    }
     @Published var speed = 4
     @Published var density = 8
     @Published var selectedFormatID: String {
@@ -36,6 +39,12 @@ final class AppStore: ObservableObject {
     @Published var senderCountry: String {
         didSet { defaults.set(senderCountry, forKey: Keys.senderCountry) }
     }
+    @Published var recipientName = ""
+    @Published var recipientStreet1 = ""
+    @Published var recipientStreet2 = ""
+    @Published var recipientPostalCode = ""
+    @Published var recipientCity = ""
+    @Published var recipientCountry = "Deutschland"
     @Published private(set) var pendingEtsyOrders: [EtsyOrder] = []
 
     let bluetooth = BluetoothPrinterService()
@@ -44,6 +53,7 @@ final class AppStore: ObservableObject {
 
     private enum Keys {
         static let selectedFormatID = "selectedLabelFormatID"
+        static let selectedShipmentKind = "selectedShipmentKind"
         static let customWidthMM = "customLabelWidthMM"
         static let customHeightMM = "customLabelHeightMM"
         static let senderName = "senderName"
@@ -55,7 +65,10 @@ final class AppStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        selectedFormatID = defaults.string(forKey: Keys.selectedFormatID) ?? LabelFormat.shipping100x150.id
+        selectedShipmentKind = ShipmentKind(
+            rawValue: defaults.string(forKey: Keys.selectedShipmentKind) ?? ""
+        ) ?? .letter
+        selectedFormatID = defaults.string(forKey: Keys.selectedFormatID) ?? LabelFormat.address89x36.id
         customWidthMM = defaults.object(forKey: Keys.customWidthMM) as? Double ?? 100
         customHeightMM = defaults.object(forKey: Keys.customHeightMM) as? Double ?? 150
         senderName = defaults.string(forKey: Keys.senderName) ?? ""
@@ -79,6 +92,17 @@ final class AppStore: ObservableObject {
             postalCode: senderPostalCode,
             city: senderCity,
             country: senderCountry
+        )
+    }
+
+    var recipientAddress: RecipientAddress {
+        RecipientAddress(
+            name: recipientName,
+            street1: recipientStreet1,
+            street2: recipientStreet2,
+            postalCode: recipientPostalCode,
+            city: recipientCity,
+            country: recipientCountry
         )
     }
 
@@ -171,53 +195,53 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func createEtsyAddressLabels(orderIDs: Set<String>) {
-        guard senderAddress.isComplete else {
-            lastMessage = "Bitte zuerst den vollständigen Absender eingeben."
-            return
-        }
-
-        let selected = pendingEtsyOrders.filter { orderIDs.contains($0.id) }
-        guard !selected.isEmpty else {
-            lastMessage = "Bitte mindestens eine Etsy-Bestellung auswählen."
-            return
-        }
-
-        var created = 0
-        for order in selected {
-            do {
-                let url = try EtsyAddressLabelWriter.write(
-                    order: order,
-                    sender: senderAddress,
-                    format: selectedLabelFormat
-                )
-                let addressFingerprint = [
-                    "etsy", order.id, order.recipientLines.joined(separator: "|"), senderAddress.singleLine
-                ].joined(separator: ":")
-                let job = try jobs.enqueue(
-                    url: url,
-                    labelFormat: selectedLabelFormat,
-                    displayName: "Etsy #\(order.id) · \(order.recipientName)",
-                    sourceFingerprint: addressFingerprint
-                )
-                selectedJobID = job.id
-                created += 1
-            } catch {
-                lastMessage = "Etsy-Etikett konnte nicht erstellt werden: \(error.localizedDescription)"
-                return
-            }
-        }
-
+    func applyEtsyOrder(_ order: EtsyOrder) {
+        recipientName = order.recipientName
+        recipientStreet1 = order.street1
+        recipientStreet2 = order.street2
+        recipientPostalCode = order.postalCode
+        recipientCity = order.city
+        recipientCountry = order.country.isEmpty ? "Deutschland" : order.country
+        selectedShipmentKind = .letter
         showEtsyImportReview = false
         pendingEtsyOrders = []
-        lastMessage = "\(created) Etsy-Adressetikett\(created == 1 ? "" : "en") ist druckbereit."
+        lastMessage = "Die Adresse von \(order.recipientName) wurde ins Formular übernommen."
+    }
+
+    func createManualAddressLabel() {
+        guard recipientAddress.isComplete else {
+            lastMessage = "Bitte die vollständige Empfängeradresse eingeben."
+            return
+        }
+        guard senderAddress.isComplete else {
+            lastMessage = "Bitte den vollständigen Absender eingeben."
+            return
+        }
+
+        do {
+            let url = try EtsyAddressLabelWriter.write(
+                recipient: recipientAddress,
+                sender: senderAddress,
+                format: selectedLabelFormat
+            )
+            let job = try jobs.enqueue(
+                url: url,
+                labelFormat: selectedLabelFormat,
+                displayName: "Brief · \(recipientAddress.name)",
+                sourceFingerprint: "manual-address:\(UUID().uuidString)"
+            )
+            selectedJobID = job.id
+            lastMessage = "Das Adressetikett für \(recipientAddress.name) ist druckbereit."
+        } catch {
+            lastMessage = "Adressetikett konnte nicht erstellt werden: \(error.localizedDescription)"
+        }
     }
 
     func chooseDHLLabelImport() {
         showEtsyImportReview = false
+        selectedShipmentKind = .parcel
+        selectedFormatID = LabelFormat.shipping100x150.id
         lastMessage = "Das bei DHL gekaufte Versandlabel jetzt als PDF auswählen."
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.showImporter = true
-        }
+        showImporter = true
     }
 }
