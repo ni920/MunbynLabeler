@@ -67,10 +67,19 @@ struct ContentView: View {
         .sheet(isPresented: $appStore.showEtsyImportReview) {
             EtsyImportView(appStore: appStore)
         }
+        .sheet(isPresented: $appStore.showBrowserOrderReview) {
+            BrowserOrderReviewView(appStore: appStore)
+        }
+        .sheet(item: $appStore.previewJob) { job in
+            PrintPreviewView(appStore: appStore, job: job)
+        }
         .alert("Etsy-Import fehlgeschlagen", isPresented: $appStore.showEtsyImportError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(appStore.lastMessage ?? "Die CSV-Datei konnte nicht importiert werden.")
+        }
+        .onChange(of: appStore.browserImportSequence) { _, _ in
+            selection = .printer
         }
         .toolbar {
             ToolbarItemGroup {

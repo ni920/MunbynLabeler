@@ -125,11 +125,11 @@ struct DashboardView: View {
                         .foregroundStyle(.red)
                         .font(.callout)
                 }
-                Button("Etikett drucken") {
-                    appStore.printJob(job)
+                Button("Druckvorschau") {
+                    appStore.presentPrintPreview(job)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!bluetooth.connectionState.isReady || job.status == .printing)
+                .disabled(job.status == .printing)
             }
             Spacer()
         }

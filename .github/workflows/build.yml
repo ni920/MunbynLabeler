@@ -29,6 +29,9 @@ jobs:
       - name: Build Universal 2 app
         run: ./script/build_and_run.sh build
 
+      - name: Test and package browser extension
+        run: ./script/package_browser_extension.sh
+
       - name: Verify bundle
         run: |
           APP_BINARY="dist/MunbynLabeler.app/Contents/MacOS/MunbynLabeler"
@@ -47,6 +50,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: MunbynLabeler-universal
-          path: dist/MunbynLabeler-universal.zip
+          path: |
+            dist/MunbynLabeler-universal.zip
+            dist/MunbynLabeler-Browser-Extension.zip
           if-no-files-found: error
           retention-days: 14

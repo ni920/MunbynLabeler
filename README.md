@@ -102,6 +102,9 @@ Notarisierung durch Apple. Weitere Informationen:
 - generates a real raster test label in the selected size
 - imports PDF, PNG and JPEG files
 - imports Etsy order CSV files and creates selectable sender/recipient labels
+- receives the open Etsy order from the Chrome/Safari browser extension
+- shows a review step for choosing letter or parcel before applying browser data
+- previews the exact black-and-white 203-dpi raster before every label print
 - offers presets for 100 × 150, 100 × 50, 89 × 36, 70 × 36 and 50 × 50 mm
 - supports custom sizes from 20–108 mm wide and 15–300 mm high
 - rasterizes each job at the RW403B resolution of 8 dots/mm (203 dpi)
@@ -153,6 +156,46 @@ swift run LabelCoreSelfTest
 
 The first Bluetooth scan triggers the macOS Bluetooth permission dialog. The app bundle contains the required privacy descriptions.
 
+## Etsy-Browser-Erweiterung
+
+Die Erweiterung ergänzt eine geöffnete Etsy-Bestellung um den Button
+**An Munbyn Labeler senden**. Nach dem Klick öffnet macOS die lokal installierte
+App. Dort werden Bestellnummer, Empfänger und erkannte Artikel angezeigt und
+erst nach der Auswahl **Brief** oder **Paket** übernommen. Es wird niemals
+automatisch gedruckt.
+
+Die Daten werden ausschließlich über den lokalen App-Link
+`munbyn-labeler://etsy-order` übertragen. Ein externer Server ist nicht
+beteiligt. Der Absender wird nicht aus Etsy übernommen, sondern einmalig unter
+**Munbyn Labeler → Einstellungen … → Allgemein** gespeichert.
+
+### Chrome
+
+1. Im passenden GitHub Release `MunbynLabeler-Browser-Extension.zip`
+   herunterladen und entpacken.
+2. `chrome://extensions` öffnen und **Entwicklermodus** aktivieren.
+3. **Entpackte Erweiterung laden** wählen.
+4. Den entpackten Ordner `BrowserExtension` auswählen.
+5. Eine Etsy-Bestellung mit sichtbarer Versandadresse öffnen und
+   **An Munbyn Labeler senden** anklicken.
+
+### Safari
+
+Chrome und Safari verwenden dieselben WebExtension-Dateien. Safari benötigt
+für eine dauerhafte Installation zusätzlich eine kleine, mit Xcode erzeugte
+Container-App. Aktuelle Safari-Versionen können den entpackten Ordner zum
+Testen auch vorübergehend über den Developer-Tab laden. Für einen lokalen
+Container-Build im Repository:
+
+```bash
+./script/create_safari_extension_project.sh
+```
+
+Danach das erzeugte Projekt in Xcode bauen und die Erweiterung unter
+**Safari → Einstellungen → Erweiterungen** einschalten. Für eine regulär
+signierte Safari-Veröffentlichung ist eine Apple-Developer-Mitgliedschaft
+erforderlich.
+
 ## Etikettenformate
 
 Das Format wird auf der Seite **Drucken** vor dem Import ausgewählt. Es gilt für
@@ -171,14 +214,15 @@ Für einen Brief:
 
 1. Empfänger und Absender direkt in das Formular eintragen.
 2. Das passende Etikettenformat auswählen.
-3. **Adressetikett erstellen** auswählen.
-4. Das erzeugte Etikett drucken.
+3. **Druckvorschau erstellen** auswählen.
+4. Das gerasterte Etikett kontrollieren und **Jetzt drucken** auswählen.
 
 Für ein Paket:
 
 1. Das Versandlabel bei DHL kaufen und als PDF herunterladen.
 2. **DHL-PDF auswählen …** anklicken.
-3. Das importierte 100 × 150-mm-Label drucken.
+3. Das importierte 100 × 150-mm-Label in der Druckvorschau kontrollieren.
+4. **Jetzt drucken** auswählen.
 
 Der Etsy-CSV-Import ist optional. Mit **Aus Etsy-CSV übernehmen …** kann die
 Empfängeradresse einer Bestellung ins Brief-Formular übernommen werden. Dazu in

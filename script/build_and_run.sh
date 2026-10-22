@@ -117,9 +117,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.4.0</string>
+  <string>0.5.0</string>
   <key>CFBundleVersion</key>
-  <string>5</string>
+  <string>6</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
@@ -128,6 +128,17 @@ cat >"$INFO_PLIST" <<PLIST
   <string>Munbyn Labeler verbindet sich mit deinem RW403B und überträgt Etiketten zum Drucken.</string>
   <key>NSBluetoothPeripheralUsageDescription</key>
   <string>Munbyn Labeler benötigt Bluetooth für die Verbindung zum RW403B.</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>de.nicosaia.MunbynLabeler.etsy-order</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>munbyn-labeler</string>
+      </array>
+    </dict>
+  </array>
   <key>NSHighResolutionCapable</key>
   <true/>
 </dict>

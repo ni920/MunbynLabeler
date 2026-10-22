@@ -5,4 +5,5 @@
 .swiftpm/
 .codex/
 dist/
+SafariExtension/
 .DS_Store

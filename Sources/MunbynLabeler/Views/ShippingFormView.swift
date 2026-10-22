@@ -41,6 +41,8 @@ struct ShippingFormView: View {
 
     private var letterForm: some View {
         VStack(alignment: .leading, spacing: 18) {
+            browserOrderSummary
+
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -65,9 +67,22 @@ struct ShippingFormView: View {
 
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("Absender", systemImage: "person.text.rectangle")
-                        .font(.headline)
-                    senderGrid
+                    HStack {
+                        Label("Absender aus den Einstellungen", systemImage: "person.text.rectangle")
+                            .font(.headline)
+                        Spacer()
+                        SettingsLink {
+                            Text(appStore.senderAddress.isComplete ? "Ändern" : "Einrichten")
+                        }
+                    }
+                    if appStore.senderAddress.isComplete {
+                        Text(appStore.senderAddress.singleLine)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    } else {
+                        Label("Bitte den Absender einmal hinterlegen.", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
                 }
                 .padding(8)
             }
@@ -86,7 +101,7 @@ struct ShippingFormView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Adressetikett erstellen") {
+                Button("Druckvorschau erstellen") {
                     appStore.createManualAddressLabel()
                 }
                 .buttonStyle(.borderedProminent)
@@ -97,31 +112,61 @@ struct ShippingFormView: View {
     }
 
     private var parcelForm: some View {
-        GroupBox {
-            HStack(alignment: .top, spacing: 16) {
-                Image(systemName: "shippingbox.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 42)
+        VStack(alignment: .leading, spacing: 18) {
+            browserOrderSummary
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("DHL-Paketlabel drucken")
-                        .font(.headline)
-                    Text("Kaufe das Versandlabel bei DHL und lade anschließend die PDF herunter. Die Empfängeradresse ist bereits im DHL-Label enthalten; eine Etsy-CSV wird dafür nicht benötigt.")
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Label("Format: Versand 100 × 150 mm", systemImage: "rectangle.portrait")
-                        .font(.callout)
-                    Button("DHL-PDF auswählen …") {
-                        appStore.chooseDHLLabelImport()
+            GroupBox {
+                HStack(alignment: .top, spacing: 16) {
+                    Image(systemName: "shippingbox.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 42)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("DHL-Paketlabel drucken")
+                            .font(.headline)
+                        Text("Kaufe das Versandlabel bei DHL und lade anschließend die PDF herunter. Die Empfängeradresse ist bereits im DHL-Label enthalten.")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Label("Format: Versand 100 × 150 mm", systemImage: "rectangle.portrait")
+                            .font(.callout)
+                        Button("DHL-PDF auswählen …") {
+                            appStore.chooseDHLLabelImport()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .padding(.top, 4)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .padding(.top, 4)
+                    Spacer()
                 }
-                Spacer()
+                .padding(12)
             }
-            .padding(12)
+        }
+    }
+
+    @ViewBuilder
+    private var browserOrderSummary: some View {
+        if let order = appStore.activeBrowserOrder {
+            GroupBox {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "cart.badge.checkmark")
+                        .foregroundStyle(Color.accentColor)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Etsy-Bestellung #\(order.orderID)")
+                            .font(.headline)
+                        Text(order.recipient.singleLine)
+                            .foregroundStyle(.secondary)
+                        if !order.items.isEmpty {
+                            Text(order.items.map { "\($0.quantity)× \($0.title)" }.joined(separator: " · "))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+                    Spacer()
+                }
+                .padding(8)
+            }
         }
     }
 
@@ -163,30 +208,4 @@ struct ShippingFormView: View {
         .textFieldStyle(.roundedBorder)
     }
 
-    private var senderGrid: some View {
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 9) {
-            GridRow {
-                Text("Name")
-                    .frame(width: 86, alignment: .leading)
-                TextField("Vor- und Nachname oder Firma", text: $appStore.senderName)
-            }
-            GridRow {
-                Text("Straße")
-                TextField("Straße und Hausnummer", text: $appStore.senderStreet)
-            }
-            GridRow {
-                Text("Ort")
-                HStack {
-                    TextField("PLZ", text: $appStore.senderPostalCode)
-                        .frame(width: 100)
-                    TextField("Ort", text: $appStore.senderCity)
-                }
-            }
-            GridRow {
-                Text("Land")
-                TextField("Land", text: $appStore.senderCountry)
-            }
-        }
-        .textFieldStyle(.roundedBorder)
-    }
 }

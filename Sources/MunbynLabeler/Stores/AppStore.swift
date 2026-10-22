@@ -8,8 +8,10 @@ final class AppStore: ObservableObject {
     @Published var showEtsyImporter = false
     @Published var showEtsyImportReview = false
     @Published var showEtsyImportError = false
+    @Published var showBrowserOrderReview = false
     @Published var lastMessage: String?
     @Published var selectedJobID: UUID?
+    @Published var previewJob: PrintJob?
     @Published var selectedShipmentKind: ShipmentKind {
         didSet { defaults.set(selectedShipmentKind.rawValue, forKey: Keys.selectedShipmentKind) }
     }
@@ -46,6 +48,9 @@ final class AppStore: ObservableObject {
     @Published var recipientCity = ""
     @Published var recipientCountry = "Deutschland"
     @Published private(set) var pendingEtsyOrders: [EtsyOrder] = []
+    @Published private(set) var incomingBrowserOrder: BrowserOrderPayload?
+    @Published private(set) var activeBrowserOrder: BrowserOrderPayload?
+    @Published private(set) var browserImportSequence = 0
 
     let bluetooth = BluetoothPrinterService()
     let jobs = PrintJobStore()
@@ -107,6 +112,7 @@ final class AppStore: ObservableObject {
     }
 
     func importFiles(_ urls: [URL]) {
+        var lastImportedJob: PrintJob?
         for url in urls {
             if url.pathExtension.lowercased() == "csv" {
                 loadEtsyCSV(url)
@@ -115,6 +121,7 @@ final class AppStore: ObservableObject {
             do {
                 let job = try jobs.enqueue(url: url, labelFormat: selectedLabelFormat)
                 selectedJobID = job.id
+                lastImportedJob = job
                 lastMessage = job.status == .printed
                     ? "Dieses Etikett wurde bereits gedruckt."
                     : "\(url.lastPathComponent) ist druckbereit."
@@ -122,6 +129,49 @@ final class AppStore: ObservableObject {
                 lastMessage = "Import fehlgeschlagen: \(error.localizedDescription)"
             }
         }
+
+        if let lastImportedJob {
+            // The file importer must finish dismissing before another sheet can open.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.presentPrintPreview(lastImportedJob)
+            }
+        }
+    }
+
+    func handleIncomingURL(_ url: URL) {
+        do {
+            let order = try BrowserOrderLink.decode(url)
+            incomingBrowserOrder = order
+            showBrowserOrderReview = true
+            browserImportSequence &+= 1
+            lastMessage = "Etsy-Bestellung #\(order.orderID) wurde aus dem Browser empfangen."
+            NSApp.activate(ignoringOtherApps: true)
+        } catch {
+            incomingBrowserOrder = nil
+            showBrowserOrderReview = false
+            lastMessage = "Browser-Import fehlgeschlagen: \(error.localizedDescription)"
+        }
+    }
+
+    func acceptIncomingBrowserOrder(as shipmentKind: ShipmentKind) {
+        guard let order = incomingBrowserOrder else { return }
+        applyRecipient(order.recipient)
+        activeBrowserOrder = order
+        selectedShipmentKind = shipmentKind
+        if shipmentKind == .parcel {
+            selectedFormatID = LabelFormat.shipping100x150.id
+        }
+        incomingBrowserOrder = nil
+        showBrowserOrderReview = false
+        browserImportSequence &+= 1
+        lastMessage = shipmentKind == .letter
+            ? "Etsy-Bestellung #\(order.orderID) wurde ins Briefformular übernommen."
+            : "Etsy-Bestellung #\(order.orderID) wurde übernommen. Jetzt das DHL-Paketlabel auswählen."
+    }
+
+    func dismissIncomingBrowserOrder() {
+        incomingBrowserOrder = nil
+        showBrowserOrderReview = false
     }
 
     func printTestLabel() {
@@ -196,12 +246,8 @@ final class AppStore: ObservableObject {
     }
 
     func applyEtsyOrder(_ order: EtsyOrder) {
-        recipientName = order.recipientName
-        recipientStreet1 = order.street1
-        recipientStreet2 = order.street2
-        recipientPostalCode = order.postalCode
-        recipientCity = order.city
-        recipientCountry = order.country.isEmpty ? "Deutschland" : order.country
+        applyRecipient(order.recipientAddress)
+        activeBrowserOrder = nil
         selectedShipmentKind = .letter
         showEtsyImportReview = false
         pendingEtsyOrders = []
@@ -232,6 +278,7 @@ final class AppStore: ObservableObject {
             )
             selectedJobID = job.id
             lastMessage = "Das Adressetikett für \(recipientAddress.name) ist druckbereit."
+            presentPrintPreview(job)
         } catch {
             lastMessage = "Adressetikett konnte nicht erstellt werden: \(error.localizedDescription)"
         }
@@ -243,5 +290,32 @@ final class AppStore: ObservableObject {
         selectedFormatID = LabelFormat.shipping100x150.id
         lastMessage = "Das bei DHL gekaufte Versandlabel jetzt als PDF auswählen."
         showImporter = true
+    }
+
+    func presentPrintPreview(_ job: PrintJob) {
+        guard FileManager.default.fileExists(atPath: job.sourceURL.path) else {
+            lastMessage = "Die Quelldatei für diese Vorschau wurde nicht gefunden."
+            return
+        }
+        selectedJobID = job.id
+        previewJob = job
+    }
+
+    func closePrintPreview() {
+        previewJob = nil
+    }
+
+    func printFromPreview(_ job: PrintJob) {
+        previewJob = nil
+        printJob(job)
+    }
+
+    private func applyRecipient(_ recipient: RecipientAddress) {
+        recipientName = recipient.name
+        recipientStreet1 = recipient.street1
+        recipientStreet2 = recipient.street2
+        recipientPostalCode = recipient.postalCode
+        recipientCity = recipient.city
+        recipientCountry = recipient.country.isEmpty ? "Deutschland" : recipient.country
     }
 }

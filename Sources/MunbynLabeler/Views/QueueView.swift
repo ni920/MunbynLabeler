@@ -33,9 +33,9 @@ struct QueueView: View {
                         Text(job.status.label)
                             .foregroundStyle(.secondary)
                         if job.status != .printed {
-                            Button(job.status == .failed ? "Erneut" : "Drucken") {
+                            Button(job.status == .failed ? "Erneut prüfen" : "Vorschau") {
                                 if job.status == .failed { jobStore.retry(job.id) }
-                                appStore.printJob(job)
+                                appStore.presentPrintPreview(job)
                             }
                             .disabled(job.status == .printing)
                         }

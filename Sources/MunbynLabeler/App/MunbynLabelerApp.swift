@@ -18,6 +18,9 @@ struct MunbynLabelerApp: App {
             ContentView()
                 .environmentObject(appStore)
                 .frame(minWidth: 920, minHeight: 620)
+                .onOpenURL { url in
+                    appStore.handleIncomingURL(url)
+                }
         }
         .defaultSize(width: 1_080, height: 720)
         .commands {
