@@ -211,6 +211,12 @@ maximal 108 mm begrenzt. PDF- und Bildinhalte werden proportional eingepasst
 und nicht verzerrt. Das Testetikett verwendet das Format der aktuell gewählten
 Versandart.
 
+Die typische DHL-Paketmarke als A4-PDF enthält oben das eigentliche Versandlabel
+und unten eine Sendungsinformation. Beim Paketimport erkennt die App dieses
+Layout automatisch, entfernt den unteren Beleg sowie die Schnittlinie, dreht
+die Paketmarke und passt nur diesen Ausschnitt auf 100 × 150 mm ein. Bereits
+passend erzeugte 100 × 150-mm-PDFs werden unverändert übernommen.
+
 ## Brief oder Paket vorbereiten
 
 Auf der Seite **Drucken** wird zuerst **Brief** oder **Paket** gewählt.

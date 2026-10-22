@@ -109,11 +109,10 @@ enum LabelRenderer {
                 throw LabelRendererError.cannotReadDocument
             }
             let source = page.getBoxRect(.mediaBox)
-            let target = aspectFit(source.size, in: canvas)
+            let placement = PDFLabelPlacement.resolve(pageBounds: source, labelFormat: format)
             context.saveGState()
-            context.translateBy(x: target.minX, y: target.minY)
-            context.scaleBy(x: target.width / source.width, y: target.height / source.height)
-            context.translateBy(x: -source.minX, y: -source.minY)
+            context.concatenate(placement.drawingTransform(in: canvas))
+            context.clip(to: placement.sourceRect)
             context.drawPDFPage(page)
             context.restoreGState()
         } else {

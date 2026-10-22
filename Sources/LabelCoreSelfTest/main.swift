@@ -66,6 +66,15 @@ do {
     let clampedFormat = LabelFormat.custom(widthMM: 500, heightMM: 2)
     try require(clampedFormat.widthMM == 108 && clampedFormat.heightMM == 15, "Custom label bounds failed")
 
+    let a4Bounds = CGRect(x: 0, y: 0, width: 595.28, height: 841.89)
+    let dhlPlacement = PDFLabelPlacement.resolve(pageBounds: a4Bounds, labelFormat: .shipping100x150)
+    try require(dhlPlacement.rotation == .clockwise90, "DHL A4 label is not rotated into portrait format")
+    try require(dhlPlacement.sourceRect.minY > a4Bounds.midY, "DHL receipt was not excluded from the crop")
+    try require(dhlPlacement.sourceRect.maxY == a4Bounds.maxY, "DHL label crop does not reach the page top")
+    let directLabelBounds = CGRect(x: 0, y: 0, width: 283.46, height: 425.2)
+    let directPlacement = PDFLabelPlacement.resolve(pageBounds: directLabelBounds, labelFormat: .shipping100x150)
+    try require(directPlacement == PDFLabelPlacement(sourceRect: directLabelBounds, rotation: .none), "Direct 100 × 150 PDF was changed")
+
     let csv = """
     Sale Date,Order ID,Full Name,Street 1,Street 2,Ship City,Ship State,Ship Zipcode,Ship Country
     10/22/26,12345,"Mia Muster","Hauptstraße 1","Wohnung 2",Saarlouis,Saarland,66740,Germany
@@ -108,7 +117,7 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 32 checks passed")
+    print("LabelCoreSelfTest: 36 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)
