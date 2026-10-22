@@ -7,6 +7,34 @@ The packaged app is a Universal 2 application containing native `arm64` and
 `x86_64` binaries. It runs on Apple Silicon and Intel Macs with macOS 14 or
 newer.
 
+## Haftungsausschluss und Eigenverantwortung
+
+Munbyn Labeler ist ein privates, unabhängiges Softwareprojekt und kein
+offizielles Produkt von MUNBYN, Etsy oder DHL. Die Software wird unentgeltlich
+und ohne Zusicherung bestimmter Eigenschaften bereitgestellt. Die Nutzung
+erfolgt auf eigene Gefahr.
+
+Es wird insbesondere keine Gewähr für Fehlerfreiheit, dauerhafte
+Verfügbarkeit, Gerätekompatibilität, korrekte Adressübernahme, passende
+Etikettenmaße, ausreichende Druckqualität oder die Annahme und Zustellung einer
+Sendung übernommen. Vor dem Aufkleben oder Versenden müssen Adresse,
+Absenderangaben, Porto, Barcodes, Etikettenformat und Druckbild vom Benutzer
+kontrolliert werden. Kosten oder Schäden durch Fehldrucke, falsch adressierte
+oder nicht zustellbare Sendungen, unzureichende Frankierung, Datenverlust sowie
+eine fehlerhafte Bedienung von Drucker oder Versanddienst entstehen in der
+Verantwortung des Benutzers.
+
+Soweit gesetzlich zulässig, ist die Haftung des Autors für Schäden aus der
+Nutzung oder Nichtverfügbarkeit der Software ausgeschlossen. Dieser Ausschluss
+gilt nicht bei Vorsatz oder grober Fahrlässigkeit, bei Schäden aus der
+Verletzung von Leben, Körper oder Gesundheit, bei der Verletzung wesentlicher
+Vertragspflichten, im Anwendungsbereich zwingender gesetzlicher Haftung oder
+soweit ausdrücklich eine Garantie übernommen wurde. Bei leicht fahrlässiger
+Verletzung wesentlicher Vertragspflichten ist die Haftung auf den
+vertragstypischen, vorhersehbaren Schaden begrenzt.
+
+Dieser Hinweis ersetzt keine individuelle Rechtsberatung.
+
 ## Installation
 
 ### Voraussetzungen
@@ -52,10 +80,11 @@ und Unversehrtheit bekannt sind.
 
 ### Aktualisierung
 
-Ab Version 0.6.0 prüft Munbyn Labeler automatisch den signierten Update-Feed
-der GitHub-Releases. Neue Versionen werden im Hintergrund geladen und nach
-Bestätigung installiert. Eine manuelle Prüfung ist jederzeit über
-**Munbyn Labeler → Nach Updates suchen …** möglich.
+Version 0.6.0 enthält den signierten Sparkle-Updater. Das Quell-Repository und
+seine GitHub-Releases sind derzeit jedoch privat. Sparkle kann den Update-Feed
+deshalb nicht ohne GitHub-Anmeldung abrufen; **Nach Updates suchen …** kann in
+diesem Zustand einen Abruffehler anzeigen. Bis ein separater öffentlicher
+Release-Feed bereitsteht, müssen neue Versionen manuell installiert werden.
 
 Version 0.6.0 muss einmal wie bisher manuell installiert werden:
 
@@ -64,8 +93,10 @@ Version 0.6.0 muss einmal wie bisher manuell installiert werden:
 3. Die neue `MunbynLabeler.app` über die vorhandene App im Programme-Ordner
    kopieren und **Ersetzen** bestätigen.
 
-Danach übernimmt der integrierte Updater weitere Versionen. Update-Archive und
-der Update-Feed werden mit einem separaten Sparkle-Ed25519-Schlüssel signiert.
+Sobald ein öffentlicher Release-Feed eingerichtet ist, kann der integrierte
+Updater weitere Versionen übernehmen. Update-Archive und der Update-Feed werden
+mit einem separaten Sparkle-Ed25519-Schlüssel signiert. Ein persönlicher
+GitHub-Zugriffsschlüssel wird weder in der App gespeichert noch verteilt.
 
 Die Druckwarteschlange bleibt bei einem App-Update erhalten, da sie getrennt
 von der App unter folgendem Pfad gespeichert wird:
@@ -104,8 +135,9 @@ Notarisierung durch Apple. Weitere Informationen:
   `ABF0` printer service instead of listing every nearby Bluetooth device
 - remembers a successfully verified printer and reconnects automatically after
   a radio interruption, printer sleep or app restart
-- checks the signed GitHub release feed automatically and installs app updates
-  through Sparkle
+- contains Sparkle support for signed automatic updates; the current private
+  GitHub release feed still requires manual installation until a separate
+  public feed is available
 - uses the RW403B BLE service `ABF0` with `ABF1` for control commands,
   `ABF3` for printer responses and `ABF4` for print data
 - performs the required device-information handshake before enabling printing
