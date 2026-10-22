@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Run protocol self-test
-        run: swift run LabelCoreSelfTest
+        run: swift run -c release LabelCoreSelfTest
 
       - name: Build Universal 2 app
         run: ./script/build_and_run.sh build
