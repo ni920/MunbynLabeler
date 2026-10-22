@@ -18,7 +18,11 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Run protocol self-test
-        run: swift run -c release LabelCoreSelfTest
+        run: |
+          swift build -c release --product LabelCoreSelfTest
+          SELF_TEST_BINARY="$(swift build -c release --show-bin-path)/LabelCoreSelfTest"
+          codesign --force --sign - "$SELF_TEST_BINARY"
+          "$SELF_TEST_BINARY"
 
       - name: Build Universal 2 app
         run: ./script/build_and_run.sh build
