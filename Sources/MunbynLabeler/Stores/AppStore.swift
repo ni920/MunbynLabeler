@@ -7,6 +7,7 @@ final class AppStore: ObservableObject {
     @Published var showImporter = false
     @Published var showEtsyImporter = false
     @Published var showEtsyImportReview = false
+    @Published var showEtsyImportError = false
     @Published var lastMessage: String?
     @Published var selectedJobID: UUID?
     @Published var speed = 4
@@ -140,13 +141,33 @@ final class AppStore: ObservableObject {
     }
 
     func loadEtsyCSV(_ url: URL) {
+        let hasSecurityScopedAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScopedAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
         do {
             pendingEtsyOrders = try EtsyOrderCSVParser.parse(url: url)
-            showEtsyImportReview = true
             lastMessage = "\(pendingEtsyOrders.count) Etsy-Bestellungen wurden gefunden."
+            showEtsyImporter = false
+
+            // A file importer is itself a modal presentation. Opening the review
+            // sheet from its completion handler can otherwise be ignored by macOS
+            // while the file importer is still being dismissed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self, !self.pendingEtsyOrders.isEmpty else { return }
+                self.showEtsyImportReview = true
+            }
         } catch {
             pendingEtsyOrders = []
-            lastMessage = "Etsy-Import fehlgeschlagen: \(error.localizedDescription)"
+            let message = error.localizedDescription
+            lastMessage = "Etsy-Import fehlgeschlagen: \(message)"
+            showEtsyImporter = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.showEtsyImportError = true
+            }
         }
     }
 

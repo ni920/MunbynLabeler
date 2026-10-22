@@ -72,6 +72,11 @@ struct ContentView: View {
         .sheet(isPresented: $appStore.showEtsyImportReview) {
             EtsyImportView(appStore: appStore)
         }
+        .alert("Etsy-Import fehlgeschlagen", isPresented: $appStore.showEtsyImportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(appStore.lastMessage ?? "Die CSV-Datei konnte nicht importiert werden.")
+        }
         .toolbar {
             ToolbarItemGroup {
                 Menu {
