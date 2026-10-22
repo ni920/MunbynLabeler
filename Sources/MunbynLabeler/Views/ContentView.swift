@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 private enum SidebarSelection: String, CaseIterable, Identifiable {
     case printer
     case queue
-    case diagnostics
 
     var id: String { rawValue }
 
@@ -12,7 +11,6 @@ private enum SidebarSelection: String, CaseIterable, Identifiable {
         switch self {
         case .printer: "Drucken"
         case .queue: "Warteschlange"
-        case .diagnostics: "Bluetooth-Diagnose"
         }
     }
 
@@ -20,7 +18,6 @@ private enum SidebarSelection: String, CaseIterable, Identifiable {
         switch self {
         case .printer: "printer.fill"
         case .queue: "list.bullet.rectangle"
-        case .diagnostics: "wave.3.right.circle"
         }
     }
 }
@@ -44,8 +41,6 @@ struct ContentView: View {
                 DashboardView(appStore: appStore, bluetooth: appStore.bluetooth, jobStore: appStore.jobs)
             case .queue:
                 QueueView(appStore: appStore, jobStore: appStore.jobs)
-            case .diagnostics:
-                BluetoothDiagnosticsView(bluetooth: appStore.bluetooth)
             }
         }
         .fileImporter(
@@ -94,6 +89,10 @@ struct ContentView: View {
                     appStore.bluetooth.startScanning()
                 } label: {
                     Label("Bluetooth suchen", systemImage: "wave.3.right")
+                }
+
+                SettingsLink {
+                    Label("Einstellungen", systemImage: "gearshape")
                 }
             }
         }

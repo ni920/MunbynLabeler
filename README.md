@@ -205,7 +205,15 @@ verarbeitet. Die PDFs liegen unter:
 4. Wait until the state becomes **Drucker verbunden**. The line below it also
    shows the status reported by the printer.
 5. If no warning is shown, choose **Testetikett**.
-6. If the connection fails, copy the entries from **Bluetooth-Diagnose**.
+6. If the connection fails, open **Munbyn Labeler → Einstellungen …** (`⌘,`),
+   switch to **Bluetooth** and copy the entries from the diagnostic log.
+
+## Einstellungen
+
+Open **Munbyn Labeler → Einstellungen …** or use `⌘,`. The **Allgemein** tab
+contains the print speed, density, default label format and sender address. The
+**Bluetooth** tab contains the live connection state, device search and the
+copyable Bluetooth diagnostic log.
 
 The BLE transport and the device-information handshake have been verified with
 a real `RW403B-NE801`: the printer acknowledges both control commands with

@@ -42,8 +42,6 @@ struct MunbynLabelerApp: App {
         Settings {
             SettingsView()
                 .environmentObject(appStore)
-                .frame(width: 420)
-                .padding()
         }
     }
 }
