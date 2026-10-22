@@ -6,6 +6,86 @@ The packaged app is a Universal 2 application containing native `arm64` and
 `x86_64` binaries. It runs on Apple Silicon and Intel Macs with macOS 14 or
 newer.
 
+## Installation
+
+### Voraussetzungen
+
+- Intel-Mac oder Apple-Silicon-Mac
+- macOS 14 oder neuer
+- Bluetooth für die Verbindung zum Etikettendrucker
+
+Für beide Prozessorarten wird dieselbe Universal-App verwendet.
+
+### Installation aus dem ZIP-Archiv
+
+1. `MunbynLabeler-universal.zip` entpacken.
+2. `MunbynLabeler.app` in den macOS-Ordner **Programme** ziehen.
+3. **Munbyn Labeler** aus dem Programme-Ordner öffnen.
+4. Beim ersten Druckerversuch den Bluetooth-Zugriff erlauben.
+
+Die App benötigt keinen klassischen Installer und installiert keine
+Systemerweiterungen oder Hintergrunddienste.
+
+### Erster Start und Gatekeeper
+
+Die derzeitigen lokalen Builds sind ad-hoc signiert, aber noch nicht mit einer
+Apple Developer ID signiert oder von Apple notarisiert. macOS kann die App beim
+ersten Start deshalb zunächst blockieren.
+
+Wenn die App aus einer vertrauenswürdigen Quelle stammt und der erste Start
+blockiert wird:
+
+1. Einmal versuchen, `MunbynLabeler.app` zu öffnen.
+2. **Systemeinstellungen → Datenschutz & Sicherheit** öffnen.
+3. Zum Abschnitt **Sicherheit** scrollen.
+4. Bei Munbyn Labeler **Dennoch öffnen** auswählen.
+5. Die erneute Sicherheitsabfrage mit **Öffnen** bestätigen.
+
+macOS speichert diese Ausnahme anschließend für die App. Apples aktuelle
+Beschreibung dieses Ablaufs befindet sich unter
+[Sicher Apps auf dem Mac öffnen](https://support.apple.com/de-de/102445).
+
+Sicherheitswarnungen sollten nur für eine App übergangen werden, deren Herkunft
+und Unversehrtheit bekannt sind.
+
+### Aktualisierung
+
+1. Munbyn Labeler beenden.
+2. Das neue ZIP-Archiv entpacken.
+3. Die neue `MunbynLabeler.app` über die vorhandene App im Programme-Ordner
+   kopieren und **Ersetzen** bestätigen.
+
+Die Druckwarteschlange bleibt bei einem App-Update erhalten, da sie getrennt
+von der App unter folgendem Pfad gespeichert wird:
+
+```text
+~/Library/Application Support/MunbynLabeler/print-jobs.json
+```
+
+### Deinstallation
+
+1. Munbyn Labeler beenden.
+2. `MunbynLabeler.app` aus dem Programme-Ordner in den Papierkorb verschieben.
+
+Die lokale Druckhistorie bleibt dabei unter
+`~/Library/Application Support/MunbynLabeler/` erhalten. Dieser Ordner kann
+separat entfernt werden, wenn auch die lokalen App-Daten gelöscht werden sollen.
+
+### Spätere Verteilung
+
+Für den aktuellen Eigengebrauch genügt das ZIP-Archiv. Für eine komfortablere
+Weitergabe kann später ein DMG mit der üblichen Drag-and-drop-Installation
+erstellt werden:
+
+```text
+[Munbyn Labeler]  →  [Programme]
+```
+
+Eine Veröffentlichung ohne Gatekeeper-Sonderfreigabe benötigt außerdem eine
+Apple-Developer-Mitgliedschaft, eine Developer-ID-Signatur und die
+Notarisierung durch Apple. Weitere Informationen:
+[Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+
 ## Current prototype
 
 - scans for nearby Bluetooth Low Energy devices
