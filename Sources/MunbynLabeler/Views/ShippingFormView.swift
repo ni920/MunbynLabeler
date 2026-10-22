@@ -20,11 +20,6 @@ struct ShippingFormView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .onChange(of: appStore.selectedShipmentKind) { _, kind in
-                if kind == .parcel {
-                    appStore.selectedFormatID = LabelFormat.shipping100x150.id
-                }
-            }
 
             Divider()
 
@@ -93,6 +88,10 @@ struct ShippingFormView: View {
             } label: {
                 Label("Etikettenformat", systemImage: "rectangle.and.pencil.and.ellipsis")
             }
+
+            Text("89 × 36 mm ist eine kompakte Briefgröße. Die App merkt sich dein zuletzt gewähltes Briefformat; Paketlabel bleiben bei 100 × 150 mm.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             HStack {
                 if !appStore.recipientAddress.isComplete || !appStore.senderAddress.isComplete {

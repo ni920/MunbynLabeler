@@ -27,7 +27,7 @@ enum EtsyAddressLabelWriter {
             sender: sender,
             format: format,
             filenamePrefix: "Etsy-\(order.id)",
-            footer: "Etsy #\(order.id)",
+            footer: nil,
             fileManager: fileManager
         )
     }
@@ -69,6 +69,33 @@ enum EtsyAddressLabelWriter {
         let safePrefix = sanitizedFilename(filenamePrefix)
         let safeName = sanitizedFilename(recipient.name)
         let url = directory.appendingPathComponent("\(safePrefix)-\(safeName).pdf")
+        let pdf = try makePDFData(
+            recipient: recipient,
+            sender: sender,
+            format: format,
+            footer: footer
+        )
+        do {
+            try pdf.write(to: url, options: .atomic)
+        } catch {
+            throw EtsyAddressLabelWriterError.cannotCreateDocument
+        }
+
+        guard fileManager.fileExists(atPath: url.path),
+              let attributes = try? fileManager.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber,
+              size.intValue > 0 else {
+            throw EtsyAddressLabelWriterError.cannotCreateDocument
+        }
+        return url
+    }
+
+    static func makePDFData(
+        recipient: RecipientAddress,
+        sender: SenderAddress,
+        format: LabelFormat,
+        footer: String? = nil
+    ) throws -> Data {
         let pointsPerMillimeter = 72.0 / 25.4
         var mediaBox = CGRect(
             x: 0,
@@ -76,8 +103,10 @@ enum EtsyAddressLabelWriter {
             width: format.widthMM * pointsPerMillimeter,
             height: format.heightMM * pointsPerMillimeter
         )
+        let data = NSMutableData()
 
-        guard let context = CGContext(url as CFURL, mediaBox: &mediaBox, nil) else {
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
             throw EtsyAddressLabelWriterError.cannotCreateDocument
         }
 
@@ -89,24 +118,21 @@ enum EtsyAddressLabelWriter {
         let margin = max(9, min(mediaBox.width, mediaBox.height) * 0.055)
         let senderFontSize = max(5.5, min(9, mediaBox.height * 0.07))
         let senderHeight = senderFontSize * 1.65
-        drawLine(
-            sender.singleLine,
+        drawFittedLine(
+            senderLine(sender),
             in: CGRect(
                 x: margin,
                 y: mediaBox.height - margin - senderHeight,
                 width: mediaBox.width - 2 * margin,
                 height: senderHeight
             ),
-            font: NSFont.systemFont(ofSize: senderFontSize),
+            maximumFontSize: senderFontSize,
+            minimumFontSize: 5.5,
             context: context,
-            truncate: true
+            underline: true
         )
 
-        let separatorY = mediaBox.height - margin - senderHeight - 2
-        context.setLineWidth(max(0.5, mediaBox.width / 500))
-        context.move(to: CGPoint(x: margin, y: separatorY))
-        context.addLine(to: CGPoint(x: mediaBox.width - margin, y: separatorY))
-        context.strokePath()
+        let separatorY = mediaBox.height - margin - senderHeight - 4
 
         let footerHeight = footer == nil ? 0 : max(8, mediaBox.height * 0.08)
         let recipientRect = CGRect(
@@ -115,7 +141,7 @@ enum EtsyAddressLabelWriter {
             width: mediaBox.width - 2 * margin,
             height: max(20, separatorY - margin - footerHeight - 6)
         )
-        drawRecipient(recipient.lines.joined(separator: "\n"), in: recipientRect, context: context)
+        drawRecipient(recipientLines(recipient), in: recipientRect, context: context)
 
         if let footer {
             drawLine(
@@ -130,20 +156,17 @@ enum EtsyAddressLabelWriter {
 
         context.endPDFPage()
         context.closePDF()
-        guard fileManager.fileExists(atPath: url.path),
-              let attributes = try? fileManager.attributesOfItem(atPath: url.path),
-              let size = attributes[.size] as? NSNumber,
-              size.intValue > 0 else {
+        guard data.length > 0 else {
             throw EtsyAddressLabelWriterError.cannotCreateDocument
         }
-        return url
+        return data as Data
     }
 
-    private static func drawRecipient(_ text: String, in rect: CGRect, context: CGContext) {
-        let upperBound = min(28, max(11, rect.height / 4.8))
+    private static func drawRecipient(_ lines: [String], in rect: CGRect, context: CGContext) {
+        let upperBound = min(18, max(9.5, min(rect.width / 19, rect.height / 5.2)))
         var fontSize = upperBound
-        while fontSize > 8 {
-            let attributed = recipientText(text, fontSize: fontSize)
+        while fontSize > 8.5 {
+            let attributed = recipientText(lines, fontSize: fontSize)
             let framesetter = CTFramesetterCreateWithAttributedString(attributed)
             let textLength = CFAttributedStringGetLength(attributed)
             let suggested = CTFramesetterSuggestFrameSizeWithConstraints(
@@ -153,11 +176,11 @@ enum EtsyAddressLabelWriter {
                 CGSize(width: rect.width, height: .greatestFiniteMagnitude),
                 nil
             )
-            if suggested.height <= rect.height && suggested.width <= rect.width + 1 { break }
+            if suggested.height <= rect.height && widestLine(lines, fontSize: fontSize) <= rect.width { break }
             fontSize -= 0.5
         }
 
-        let attributed = recipientText(text, fontSize: fontSize)
+        let attributed = recipientText(lines, fontSize: fontSize)
         let framesetter = CTFramesetterCreateWithAttributedString(attributed)
         let textLength = CFAttributedStringGetLength(attributed)
         let suggested = CTFramesetterSuggestFrameSizeWithConstraints(
@@ -167,24 +190,81 @@ enum EtsyAddressLabelWriter {
             CGSize(width: rect.width, height: rect.height),
             nil
         )
-        let verticalOffset = max(0, (rect.height - suggested.height) / 2)
-        let textRect = CGRect(x: rect.minX, y: rect.minY + verticalOffset, width: rect.width, height: rect.height - verticalOffset)
+        let textHeight = min(rect.height, suggested.height + fontSize * 0.2)
+        let textRect = CGRect(
+            x: rect.minX,
+            y: rect.minY + max(0, (rect.height - textHeight) / 2),
+            width: rect.width,
+            height: textHeight
+        )
         let path = CGPath(rect: textRect, transform: nil)
         let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: textLength), path, nil)
         CTFrameDraw(frame, context)
     }
 
-    private static func recipientText(_ text: String, fontSize: CGFloat) -> CFAttributedString {
+    private static func recipientText(_ lines: [String], fontSize: CGFloat) -> CFAttributedString {
+        let text = lines.joined(separator: "\n")
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = fontSize * 0.18
-        return NSAttributedString(
+        paragraph.lineSpacing = fontSize * 0.12
+        let attributed = NSMutableAttributedString(
             string: text,
             attributes: [
-                .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+                .font: NSFont.systemFont(ofSize: fontSize, weight: .medium),
                 .foregroundColor: NSColor.black,
                 .paragraphStyle: paragraph
             ]
         )
+        if let firstLine = lines.first, !firstLine.isEmpty {
+            attributed.addAttribute(
+                .font,
+                value: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+                range: NSRange(location: 0, length: (firstLine as NSString).length)
+            )
+        }
+        return attributed
+    }
+
+    private static func widestLine(_ lines: [String], fontSize: CGFloat) -> CGFloat {
+        lines.enumerated().map { index, line in
+            let font = NSFont.systemFont(ofSize: fontSize, weight: index == 0 ? .semibold : .medium)
+            let attributed = NSAttributedString(string: line, attributes: [.font: font])
+            return CGFloat(CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attributed), nil, nil, nil))
+        }.max() ?? 0
+    }
+
+    private static func drawFittedLine(
+        _ text: String,
+        in rect: CGRect,
+        maximumFontSize: CGFloat,
+        minimumFontSize: CGFloat,
+        context: CGContext,
+        underline: Bool = false
+    ) {
+        var fontSize = maximumFontSize
+        while fontSize > minimumFontSize {
+            let font = NSFont.systemFont(ofSize: fontSize)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font]))
+            if CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) <= rect.width { break }
+            fontSize -= 0.25
+        }
+
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byClipping
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize),
+            .foregroundColor: NSColor.black,
+            .paragraphStyle: paragraph
+        ]
+        if underline {
+            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        }
+        let attributed = NSAttributedString(string: text, attributes: attributes)
+        let line = CTLineCreateWithAttributedString(attributed)
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        CTLineGetTypographicBounds(line, &ascent, &descent, nil)
+        context.textPosition = CGPoint(x: rect.minX, y: rect.midY - (ascent + descent) / 2)
+        CTLineDraw(line, context)
     }
 
     private static func drawLine(
@@ -223,5 +303,36 @@ enum EtsyAddressLabelWriter {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
         let value = value.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
         return String(value).replacingOccurrences(of: "--", with: "-").prefix(60).description
+    }
+
+    private static func recipientLines(_ recipient: RecipientAddress) -> [String] {
+        var lines = [recipient.name, recipient.street1]
+        if !recipient.street2.isEmpty { lines.append(recipient.street2) }
+        let locality = [recipient.postalCode, recipient.city]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        if !locality.isEmpty { lines.append(locality) }
+        if !recipient.state.isEmpty, !lines.contains(recipient.state) { lines.append(recipient.state) }
+        if !recipient.country.isEmpty, !isGermany(recipient.country) {
+            lines.append(recipient.country.uppercased(with: Locale(identifier: "de_DE")))
+        }
+        return lines.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private static func senderLine(_ sender: SenderAddress) -> String {
+        var parts = [sender.name, sender.street, "\(sender.postalCode) \(sender.city)"]
+        if !sender.country.isEmpty, !isGermany(sender.country) { parts.append(sender.country) }
+        return parts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    private static func isGermany(_ value: String) -> Bool {
+        let normalized = value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "de_DE"))
+            .lowercased()
+            .filter { $0.isLetter }
+        return ["de", "deutschland", "germany", "bundesrepublikdeutschland"].contains(normalized)
     }
 }

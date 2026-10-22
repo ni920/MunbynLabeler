@@ -13,12 +13,22 @@ final class AppStore: ObservableObject {
     @Published var selectedJobID: UUID?
     @Published var previewJob: PrintJob?
     @Published var selectedShipmentKind: ShipmentKind {
-        didSet { defaults.set(selectedShipmentKind.rawValue, forKey: Keys.selectedShipmentKind) }
+        didSet {
+            defaults.set(selectedShipmentKind.rawValue, forKey: Keys.selectedShipmentKind)
+            selectedFormatID = selectedShipmentKind == .letter
+                ? defaults.string(forKey: Keys.lastLetterFormatID) ?? LabelFormat.address89x36.id
+                : LabelFormat.shipping100x150.id
+        }
     }
     @Published var speed = 4
     @Published var density = 8
     @Published var selectedFormatID: String {
-        didSet { defaults.set(selectedFormatID, forKey: Keys.selectedFormatID) }
+        didSet {
+            defaults.set(selectedFormatID, forKey: Keys.selectedFormatID)
+            if selectedShipmentKind == .letter {
+                defaults.set(selectedFormatID, forKey: Keys.lastLetterFormatID)
+            }
+        }
     }
     @Published var customWidthMM: Double {
         didSet { defaults.set(customWidthMM, forKey: Keys.customWidthMM) }
@@ -58,6 +68,7 @@ final class AppStore: ObservableObject {
 
     private enum Keys {
         static let selectedFormatID = "selectedLabelFormatID"
+        static let lastLetterFormatID = "lastLetterLabelFormatID"
         static let selectedShipmentKind = "selectedShipmentKind"
         static let customWidthMM = "customLabelWidthMM"
         static let customHeightMM = "customLabelHeightMM"
@@ -70,10 +81,18 @@ final class AppStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        selectedShipmentKind = ShipmentKind(
+        let initialShipmentKind = ShipmentKind(
             rawValue: defaults.string(forKey: Keys.selectedShipmentKind) ?? ""
         ) ?? .letter
-        selectedFormatID = defaults.string(forKey: Keys.selectedFormatID) ?? LabelFormat.address89x36.id
+        selectedShipmentKind = initialShipmentKind
+        let storedFormatID = defaults.string(forKey: Keys.selectedFormatID)
+        if initialShipmentKind == .parcel {
+            selectedFormatID = LabelFormat.shipping100x150.id
+        } else {
+            selectedFormatID = defaults.string(forKey: Keys.lastLetterFormatID)
+                ?? storedFormatID
+                ?? LabelFormat.address89x36.id
+        }
         customWidthMM = defaults.object(forKey: Keys.customWidthMM) as? Double ?? 100
         customHeightMM = defaults.object(forKey: Keys.customHeightMM) as? Double ?? 150
         senderName = defaults.string(forKey: Keys.senderName) ?? ""
@@ -158,9 +177,6 @@ final class AppStore: ObservableObject {
         applyRecipient(order.recipient)
         activeBrowserOrder = order
         selectedShipmentKind = shipmentKind
-        if shipmentKind == .parcel {
-            selectedFormatID = LabelFormat.shipping100x150.id
-        }
         incomingBrowserOrder = nil
         showBrowserOrderReview = false
         browserImportSequence &+= 1
@@ -287,7 +303,6 @@ final class AppStore: ObservableObject {
     func chooseDHLLabelImport() {
         showEtsyImportReview = false
         selectedShipmentKind = .parcel
-        selectedFormatID = LabelFormat.shipping100x150.id
         lastMessage = "Das bei DHL gekaufte Versandlabel jetzt als PDF auswählen."
         showImporter = true
     }

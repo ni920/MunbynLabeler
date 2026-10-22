@@ -213,9 +213,14 @@ Auf der Seite **Drucken** wird zuerst **Brief** oder **Paket** gewählt.
 Für einen Brief:
 
 1. Empfänger und Absender direkt in das Formular eintragen.
-2. Das passende Etikettenformat auswählen.
+2. Beim ersten Mal ist **89 × 36 mm** vorausgewählt. Bei Bedarf kann ein anderes Format ausgewählt werden; die App merkt sich das zuletzt verwendete Briefformat.
 3. **Druckvorschau erstellen** auswählen.
 4. Das gerasterte Etikett kontrollieren und **Jetzt drucken** auswählen.
+
+Das Briefetikett verwendet eine kleine, vollständig eingepasste Absenderzeile
+und einen kompakten Empfängerblock. Bei deutschen Inlandsadressen wird
+**Deutschland** nicht mitgedruckt; bei Auslandsadressen bleibt das Zielland
+erhalten.
 
 Für ein Paket:
 
