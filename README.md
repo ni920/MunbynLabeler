@@ -52,10 +52,20 @@ und Unversehrtheit bekannt sind.
 
 ### Aktualisierung
 
+Ab Version 0.6.0 prüft Munbyn Labeler automatisch den signierten Update-Feed
+der GitHub-Releases. Neue Versionen werden im Hintergrund geladen und nach
+Bestätigung installiert. Eine manuelle Prüfung ist jederzeit über
+**Munbyn Labeler → Nach Updates suchen …** möglich.
+
+Version 0.6.0 muss einmal wie bisher manuell installiert werden:
+
 1. Munbyn Labeler beenden.
 2. Das neue ZIP-Archiv entpacken.
 3. Die neue `MunbynLabeler.app` über die vorhandene App im Programme-Ordner
    kopieren und **Ersetzen** bestätigen.
+
+Danach übernimmt der integrierte Updater weitere Versionen. Update-Archive und
+der Update-Feed werden mit einem separaten Sparkle-Ed25519-Schlüssel signiert.
 
 Die Druckwarteschlange bleibt bei einem App-Update erhalten, da sie getrennt
 von der App unter folgendem Pfad gespeichert wird:
@@ -94,6 +104,8 @@ Notarisierung durch Apple. Weitere Informationen:
   `ABF0` printer service instead of listing every nearby Bluetooth device
 - remembers a successfully verified printer and reconnects automatically after
   a radio interruption, printer sleep or app restart
+- checks the signed GitHub release feed automatically and installs app updates
+  through Sparkle
 - uses the RW403B BLE service `ABF0` with `ABF1` for control commands,
   `ABF3` for printer responses and `ABF4` for print data
 - performs the required device-information handshake before enabling printing

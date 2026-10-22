@@ -37,6 +37,8 @@ jobs:
           APP_BINARY="dist/MunbynLabeler.app/Contents/MacOS/MunbynLabeler"
           lipo "$APP_BINARY" -verify_arch arm64
           lipo "$APP_BINARY" -verify_arch x86_64
+          test -d dist/MunbynLabeler.app/Contents/Frameworks/Sparkle.framework
+          otool -L "$APP_BINARY" | grep -q Sparkle.framework
           codesign --verify --deep --strict dist/MunbynLabeler.app
           test -f dist/MunbynLabeler.app/Contents/Resources/AppIcon.icns
 

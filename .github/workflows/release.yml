@@ -31,6 +31,8 @@ jobs:
           APP_BINARY="dist/MunbynLabeler.app/Contents/MacOS/MunbynLabeler"
           lipo "$APP_BINARY" -verify_arch arm64
           lipo "$APP_BINARY" -verify_arch x86_64
+          test -d dist/MunbynLabeler.app/Contents/Frameworks/Sparkle.framework
+          otool -L "$APP_BINARY" | grep -q Sparkle.framework
           codesign --verify --deep --strict dist/MunbynLabeler.app
           test -f dist/MunbynLabeler.app/Contents/Resources/AppIcon.icns
 
@@ -45,6 +47,29 @@ jobs:
           shasum -a 256 MunbynLabeler-Browser-Extension.zip \
             > MunbynLabeler-Browser-Extension.zip.sha256
 
+      - name: Generate signed Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY"
+          UPDATES_DIR="$RUNNER_TEMP/munbyn-updates"
+          mkdir -p "$UPDATES_DIR"
+          cp dist/MunbynLabeler-universal.zip "$UPDATES_DIR/"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            .build/artifacts/sparkle/Sparkle/bin/generate_appcast \
+              --ed-key-file - \
+              --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/" \
+              --link "https://github.com/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME" \
+              --maximum-deltas 0 \
+              -o "$UPDATES_DIR/appcast.xml" \
+              "$UPDATES_DIR"
+          cp "$UPDATES_DIR/appcast.xml" dist/appcast.xml
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | \
+            .build/artifacts/sparkle/Sparkle/bin/sign_update \
+              --ed-key-file - \
+              --verify \
+              dist/appcast.xml
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,6 +79,7 @@ jobs:
             dist/MunbynLabeler-universal.zip.sha256 \
             dist/MunbynLabeler-Browser-Extension.zip \
             dist/MunbynLabeler-Browser-Extension.zip.sha256 \
+            dist/appcast.xml \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \

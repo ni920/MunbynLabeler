@@ -14,6 +14,7 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
+APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_SOURCE="$ROOT_DIR/Resources/AppIcon-1024.png"
@@ -71,9 +72,27 @@ for ARCHITECTURE in "${TARGET_ARCHITECTURES[@]}"; do
 done
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_FRAMEWORKS"
 /usr/bin/lipo -create "${BUILD_BINARIES[@]}" -output "$APP_BINARY"
 chmod +x "$APP_BINARY"
+/usr/bin/install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BINARY"
+
+SPARKLE_FRAMEWORK=""
+for CANDIDATE in \
+  "$UNIVERSAL_BUILD_DIR/arm64/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" \
+  "$ROOT_DIR/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"; do
+  if [[ -d "$CANDIDATE" ]]; then
+    SPARKLE_FRAMEWORK="$CANDIDATE"
+    break
+  fi
+done
+
+if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
+  echo "Sparkle.framework was not produced by Swift Package Manager." >&2
+  exit 1
+fi
+
+/usr/bin/ditto "$SPARKLE_FRAMEWORK" "$APP_FRAMEWORKS/Sparkle.framework"
 
 ICONSET_DIR="$UNIVERSAL_BUILD_DIR/AppIcon.iconset"
 rm -rf "$ICONSET_DIR"
@@ -119,9 +138,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>LSMultipleInstancesProhibited</key>
   <true/>
   <key>CFBundleShortVersionString</key>
-  <string>0.5.8</string>
+  <string>0.6.0</string>
   <key>CFBundleVersion</key>
-  <string>14</string>
+  <string>15</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
@@ -130,6 +149,18 @@ cat >"$INFO_PLIST" <<PLIST
   <string>Munbyn Labeler verbindet sich mit deinem RW403B und überträgt Etiketten zum Drucken.</string>
   <key>NSBluetoothPeripheralUsageDescription</key>
   <string>Munbyn Labeler benötigt Bluetooth für die Verbindung zum RW403B.</string>
+  <key>SUFeedURL</key>
+  <string>https://github.com/ni920/MunbynLabeler/releases/latest/download/appcast.xml</string>
+  <key>SUPublicEDKey</key>
+  <string>4aN2cdQ63ff/1pUEqYsGAJEvzMI126W3mlxwUCvIhCY=</string>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+  <key>SUAutomaticallyUpdate</key>
+  <true/>
+  <key>SUVerifyUpdateBeforeExtraction</key>
+  <true/>
+  <key>SURequireSignedFeed</key>
+  <true/>
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
@@ -147,6 +178,7 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+/usr/bin/codesign --force --deep --sign - "$APP_FRAMEWORKS/Sparkle.framework"
 /usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
 
 open_app() {
