@@ -80,8 +80,8 @@ struct DashboardView: View {
                 VStack(spacing: 8) {
                     ForEach(bluetooth.discoveredDevices.prefix(8)) { device in
                         HStack {
-                            Image(systemName: device.looksLikeMunbyn ? "printer" : "dot.radiowaves.left.and.right")
-                                .foregroundStyle(device.looksLikeMunbyn ? Color.accentColor : Color.secondary)
+                            Image(systemName: "printer")
+                                .foregroundStyle(Color.accentColor)
                             VStack(alignment: .leading) {
                                 Text(device.name)
                                 Text("Signal \(device.rssi) dBm")

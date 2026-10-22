@@ -66,6 +66,11 @@ func protobufVarintField(_ number: Int, in data: Data) -> UInt64? {
 }
 
 do {
+    try require(SupportedBluetoothPrinter.matches(name: "RW403B-NE801"), "RW403B device name was rejected")
+    try require(SupportedBluetoothPrinter.matches(name: "MUNBYN RW403B"), "MUNBYN RW403B device name was rejected")
+    try require(!SupportedBluetoothPrinter.matches(name: "Nicos AirPods"), "Unrelated Bluetooth device was accepted")
+    try require(!SupportedBluetoothPrinter.matches(name: "MUNBYN Printer"), "Unknown MUNBYN model was accepted")
+
     let bitmap = Data([0xAA, 0x55, 0xF0, 0x0F])
     let raster = LabelRaster(width: 16, height: 2, bytesPerRow: 2, bitmap: bitmap)
     let job = TSPLCommandBuilder.bitmapJob(raster: raster, speed: 99, density: 0)
@@ -178,7 +183,7 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 38 checks passed")
+    print("LabelCoreSelfTest: 43 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)

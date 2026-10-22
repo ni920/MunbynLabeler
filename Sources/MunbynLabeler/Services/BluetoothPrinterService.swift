@@ -6,11 +6,6 @@ struct DiscoveredBluetoothPrinter: Identifiable, Equatable {
     let id: UUID
     let name: String
     let rssi: Int
-
-    var looksLikeMunbyn: Bool {
-        let normalized = name.uppercased()
-        return normalized.contains("RW403") || normalized.contains("MUNBYN")
-    }
 }
 
 enum BluetoothConnectionState: Equatable {
@@ -123,17 +118,22 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     private var sectionAckTimeout: DispatchWorkItem?
     private var printCompletionTimeout: DispatchWorkItem?
     private var pacedWrite: DispatchWorkItem?
+    private var reconnectWorkItem: DispatchWorkItem?
+    private var reconnectAttempt = 0
+    private var userRequestedDisconnect = false
+
+    private let rememberedPrinterIDKey = "rememberedRW403BPeripheralID"
+    private let rememberedPrinterNameKey = "rememberedRW403BPeripheralName"
 
     override init() {
         super.init()
+        centralManager = CBCentralManager(delegate: self, queue: .main)
     }
 
     func startScanning() {
         scanRequested = true
         guard let centralManager else {
-            connectionState = .unavailable("Bluetooth wird initialisiert …")
-            diagnostics = ["Bluetooth-Dienst wird initialisiert"]
-            self.centralManager = CBCentralManager(delegate: self, queue: .main)
+            connectionState = .unavailable("Bluetooth konnte nicht initialisiert werden.")
             return
         }
         guard centralManager.state == .poweredOn else {
@@ -159,18 +159,91 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
 
     func connect(to id: UUID) {
         guard let centralManager, let peripheral = peripherals[id] else { return }
-        centralManager.stopScan()
-        connectedPeripheral = peripheral
-        clearCharacteristics()
-        peripheral.delegate = self
-        connectionState = .connecting(peripheral.name ?? "Unbekanntes Gerät")
-        diagnostics.append("Verbinde mit \(peripheral.name ?? id.uuidString)")
-        centralManager.connect(peripheral)
+        userRequestedDisconnect = false
+        reconnectAttempt = 0
+        beginConnection(to: peripheral, using: centralManager, isReconnect: false)
     }
 
     func disconnect() {
         guard let centralManager, let connectedPeripheral else { return }
+        userRequestedDisconnect = true
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+        forgetRememberedPrinter()
         centralManager.cancelPeripheralConnection(connectedPeripheral)
+    }
+
+    private func beginConnection(
+        to peripheral: CBPeripheral,
+        using central: CBCentralManager,
+        isReconnect: Bool
+    ) {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+        central.stopScan()
+        peripherals[peripheral.identifier] = peripheral
+        connectedPeripheral = peripheral
+        clearCharacteristics()
+        peripheral.delegate = self
+        let name = peripheral.name ?? rememberedPrinterName ?? "RW403B"
+        connectionState = .connecting(
+            isReconnect ? "\(name) · Verbindung wird wiederhergestellt" : name
+        )
+        diagnostics.append(isReconnect ? "Verbinde RW403B automatisch erneut" : "Verbinde mit \(name)")
+        central.connect(
+            peripheral,
+            options: [CBConnectPeripheralOptionNotifyOnDisconnectionKey: true]
+        )
+    }
+
+    private func rememberPrinter(_ peripheral: CBPeripheral) {
+        UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: rememberedPrinterIDKey)
+        UserDefaults.standard.set(peripheral.name ?? "RW403B", forKey: rememberedPrinterNameKey)
+    }
+
+    private func forgetRememberedPrinter() {
+        UserDefaults.standard.removeObject(forKey: rememberedPrinterIDKey)
+        UserDefaults.standard.removeObject(forKey: rememberedPrinterNameKey)
+    }
+
+    private var rememberedPrinterID: UUID? {
+        UserDefaults.standard.string(forKey: rememberedPrinterIDKey).flatMap(UUID.init(uuidString:))
+    }
+
+    private var rememberedPrinterName: String? {
+        UserDefaults.standard.string(forKey: rememberedPrinterNameKey)
+    }
+
+    private func restoreRememberedPrinter(using central: CBCentralManager) -> Bool {
+        guard !userRequestedDisconnect, let id = rememberedPrinterID else { return false }
+        guard let peripheral = central.retrievePeripherals(withIdentifiers: [id]).first else {
+            diagnostics.append("Gespeicherter RW403B ist derzeit nicht erreichbar")
+            return false
+        }
+        beginConnection(to: peripheral, using: central, isReconnect: true)
+        return true
+    }
+
+    private func scheduleReconnect(to peripheral: CBPeripheral, using central: CBCentralManager) {
+        guard !userRequestedDisconnect, rememberedPrinterID == peripheral.identifier else {
+            connectedPeripheral = nil
+            connectionState = .idle
+            return
+        }
+
+        reconnectWorkItem?.cancel()
+        reconnectAttempt += 1
+        let delay = min(8, 1 << min(reconnectAttempt - 1, 3))
+        let name = peripheral.name ?? rememberedPrinterName ?? "RW403B"
+        connectionState = .connecting("\(name) · neuer Versuch in \(delay) s")
+        diagnostics.append("RW403B getrennt; automatische Wiederverbindung in \(delay) s")
+
+        let work = DispatchWorkItem { [weak self, weak peripheral] in
+            guard let self, let peripheral, central.state == .poweredOn else { return }
+            self.beginConnection(to: peripheral, using: central, isReconnect: true)
+        }
+        reconnectWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(delay), execute: work)
     }
 
     func printSelfTest(completion: @escaping (Result<Void, Error>) -> Void) {
@@ -442,6 +515,7 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     }
 
     private func finalizeConnection(for peripheral: CBPeripheral) {
+        guard !userRequestedDisconnect else { return }
         connectionHandshakeTimeout?.cancel()
         connectionHandshakeTimeout = nil
         connectionHandshakePending = false
@@ -449,6 +523,9 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
         let controlMaximum = peripheral.maximumWriteValueLength(for: .withResponse)
         let status = latestPrintStatus == 0 ? "druckbereit" : statusDescription(latestPrintStatus)
         connectionState = .ready("\(peripheral.name ?? "RW403B") · \(status)")
+        reconnectAttempt = 0
+        userRequestedDisconnect = false
+        rememberPrinter(peripheral)
         diagnostics.append("RW403B bereit: ABF4 Daten (max. \(dataMaximum)), ABF1 Steuerung (max. \(controlMaximum)), ABF3 Antworten")
     }
 
@@ -522,11 +599,15 @@ extension BluetoothPrinterService: CBCentralManagerDelegate {
         if central.state == .poweredOn {
             if scanRequested {
                 startScanning()
+            } else if restoreRememberedPrinter(using: central) {
+                diagnostics.append("Gespeicherter RW403B wird automatisch verbunden")
             } else if case .unavailable = connectionState {
                 connectionState = .idle
             }
         } else {
             scanRequested = false
+            reconnectWorkItem?.cancel()
+            reconnectWorkItem = nil
             connectionState = .unavailable(stateDescription(central.state))
         }
     }
@@ -537,9 +618,14 @@ extension BluetoothPrinterService: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        let name = peripheral.name
-            ?? advertisementData[CBAdvertisementDataLocalNameKey] as? String
+        let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+            ?? peripheral.name
             ?? "Unbenanntes Bluetooth-Gerät"
+        let advertisedServices = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+        let advertisesRW403BProtocol = advertisedServices.contains {
+            $0.uuidString.uppercased() == MunbynRW403BProtocol.serviceUUID
+        }
+        guard SupportedBluetoothPrinter.matches(name: name) || advertisesRW403BProtocol else { return }
         peripherals[peripheral.identifier] = peripheral
         let device = DiscoveredBluetoothPrinter(id: peripheral.identifier, name: name, rssi: RSSI.intValue)
         if let index = discoveredDevices.firstIndex(where: { $0.id == device.id }) {
@@ -547,9 +633,12 @@ extension BluetoothPrinterService: CBCentralManagerDelegate {
         } else {
             discoveredDevices.append(device)
         }
-        discoveredDevices.sort {
-            if $0.looksLikeMunbyn != $1.looksLikeMunbyn { return $0.looksLikeMunbyn }
-            return $0.rssi > $1.rssi
+        discoveredDevices.sort { $0.rssi > $1.rssi }
+
+        if !userRequestedDisconnect,
+           rememberedPrinterID == peripheral.identifier,
+           connectedPeripheral?.state != .connected {
+            beginConnection(to: peripheral, using: central, isReconnect: true)
         }
     }
 
@@ -560,8 +649,12 @@ extension BluetoothPrinterService: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        connectionState = .failed(error?.localizedDescription ?? "Das Gerät hat die Verbindung abgelehnt.")
         diagnostics.append("Verbindungsfehler: \(error?.localizedDescription ?? "unbekannt")")
+        if !userRequestedDisconnect, rememberedPrinterID == peripheral.identifier {
+            scheduleReconnect(to: peripheral, using: central)
+        } else {
+            connectionState = .failed(error?.localizedDescription ?? "Das Gerät hat die Verbindung abgelehnt.")
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
@@ -569,11 +662,13 @@ extension BluetoothPrinterService: CBCentralManagerDelegate {
             finishTransfer(.failure(error ?? BluetoothPrinterError.notConnected))
         }
         clearCharacteristics()
-        connectedPeripheral = nil
-        connectionState = error == nil
-            ? .idle
-            : .failed(error?.localizedDescription ?? "Bluetooth-Verbindung getrennt")
-        diagnostics.append("Verbindung getrennt")
+        diagnostics.append("Verbindung getrennt\(error.map { ": \($0.localizedDescription)" } ?? "")")
+        if userRequestedDisconnect {
+            connectedPeripheral = nil
+            connectionState = .idle
+        } else {
+            scheduleReconnect(to: peripheral, using: central)
+        }
     }
 }
 

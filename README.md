@@ -90,8 +90,10 @@ Notarisierung durch Apple. Weitere Informationen:
 
 ## Current prototype
 
-- scans for nearby Bluetooth Low Energy devices
-- prioritizes devices named `RW403B` or `MUNBYN`
+- shows only discovered `RW403B` printers or devices advertising the compatible
+  `ABF0` printer service instead of listing every nearby Bluetooth device
+- remembers a successfully verified printer and reconnects automatically after
+  a radio interruption, printer sleep or app restart
 - uses the RW403B BLE service `ABF0` with `ABF1` for control commands,
   `ABF3` for printer responses and `ABF4` for print data
 - performs the required device-information handshake before enabling printing
@@ -269,6 +271,10 @@ verarbeitet. Die PDFs liegen unter:
 5. If no warning is shown, choose **Testetikett**.
 6. If the connection fails, open **Munbyn Labeler → Einstellungen …** (`⌘,`),
    switch to **Bluetooth** and copy the entries from the diagnostic log.
+
+After the first successful connection, the app remembers the verified RW403B
+and reconnects it automatically. Choosing **Trennen** disables that behavior
+until a printer is connected manually again.
 
 ## Einstellungen
 
