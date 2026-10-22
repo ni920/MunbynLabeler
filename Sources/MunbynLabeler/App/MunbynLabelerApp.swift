@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -23,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct MunbynLabelerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appStore = AppStore()
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     var body: some Scene {
         Window("Munbyn Labeler", id: "main") {
@@ -37,6 +43,13 @@ struct MunbynLabelerApp: App {
         }
         .defaultSize(width: 1_080, height: 720)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Nach Updates suchen …") {
+                    updaterController.checkForUpdates(nil)
+                }
+                .disabled(!updaterController.updater.canCheckForUpdates)
+            }
+
             CommandGroup(after: .newItem) {
                 Button("Etikett importieren …") {
                     appStore.showImporter = true
