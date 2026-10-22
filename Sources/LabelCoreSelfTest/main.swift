@@ -38,7 +38,48 @@ do {
     try require(text.contains("Line 1 Line 2"), "Newline escaping failed")
     try require(text.hasSuffix("PRINT 1,1\r\n"), "Test label is incomplete")
 
-    print("LabelCoreSelfTest: 8 checks passed")
+    let heatshrinkInput = Data([65, 66, 65, 66, 65, 66])
+    let compressed = HeatshrinkCodec.compress(heatshrinkInput)
+    try require(compressed == Data([0xA0, 0xD0, 0x80, 0x04, 0xC0]), "Heatshrink wire format differs from RW403B")
+    try require(HeatshrinkCodec.decompress(compressed) == heatshrinkInput, "Heatshrink round trip failed")
+
+    var frameDecoder = MunbynFrameDecoder()
+    let selfTestFrame = MunbynRW403BProtocol.selfTestFrame()
+    let selfTestPayloads = frameDecoder.append(selfTestFrame)
+    try require(selfTestPayloads == [Data([0x08, 0x02])], "RW403B self-test frame is invalid")
+
+    let sections = MunbynRW403BProtocol.printSections(raster: raster, maximumImageChunkLength: 40)
+    try require(!sections.isEmpty, "RW403B raster produced no sections")
+    try require(sections.allSatisfy { !$0.frames.isEmpty }, "RW403B raster section has no frames")
+    var printFrameDecoder = MunbynFrameDecoder()
+    try require(printFrameDecoder.append(sections[0].frames[0]).count == 1, "RW403B print frame is invalid")
+
+    let addressFormat = LabelFormat.address89x36
+    try require(addressFormat.widthDots == 712, "89 mm label width has wrong 8 dots/mm conversion")
+    try require(addressFormat.heightDots == 288, "36 mm label height has wrong 203 dpi conversion")
+    let clampedFormat = LabelFormat.custom(widthMM: 500, heightMM: 2)
+    try require(clampedFormat.widthMM == 108 && clampedFormat.heightMM == 15, "Custom label bounds failed")
+
+    let csv = """
+    Sale Date,Order ID,Full Name,Street 1,Street 2,Ship City,Ship State,Ship Zipcode,Ship Country
+    10/22/26,12345,"Mia Muster","Hauptstraße 1","Wohnung 2",Saarlouis,Saarland,66740,Germany
+    10/22/26,12346,"John Smith","12 Market Street, South",,London,,SW1A 1AA,United Kingdom
+    """
+    let etsyOrders = try EtsyOrderCSVParser.parse(text: csv)
+    try require(etsyOrders.count == 2, "Etsy CSV order count is wrong")
+    try require(etsyOrders[0].recipientName == "Mia Muster", "Etsy recipient name was not parsed")
+    try require(etsyOrders[1].street1 == "12 Market Street, South", "Quoted Etsy address was not parsed")
+    try require(etsyOrders[0].recipientLines.contains("66740 Saarlouis"), "Etsy locality formatting failed")
+
+    let legacyJobJSON = """
+    {"id":"00000000-0000-0000-0000-000000000001","sourceURL":"file:///tmp/label.pdf","sourceFingerprint":"legacy","createdAt":0,"status":"ready"}
+    """
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
+    try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
+
+    print("LabelCoreSelfTest: 22 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)

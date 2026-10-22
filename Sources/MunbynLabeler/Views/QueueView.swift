@@ -18,9 +18,9 @@ struct QueueView: View {
                     HStack(spacing: 14) {
                         statusIcon(job.status)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(job.sourceURL.lastPathComponent)
+                            Text(job.title)
                                 .font(.headline)
-                            Text(job.createdAt, format: .dateTime.day().month().hour().minute())
+                            Text("\(job.resolvedLabelFormat.sizeDescription) · \(job.createdAt.formatted(.dateTime.day().month().hour().minute()))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let error = job.errorMessage {

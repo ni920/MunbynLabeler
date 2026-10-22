@@ -31,6 +31,11 @@ struct MunbynLabelerApp: App {
                     appStore.bluetooth.startScanning()
                 }
                 .keyboardShortcut("r")
+
+                Button("Etsy-Bestellungen importieren …") {
+                    appStore.showEtsyImporter = true
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
             }
         }
 

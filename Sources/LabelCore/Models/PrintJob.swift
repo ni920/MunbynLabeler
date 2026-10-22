@@ -21,6 +21,8 @@ public struct PrintJob: Identifiable, Codable, Equatable, Sendable {
     public let sourceURL: URL
     public let sourceFingerprint: String
     public let createdAt: Date
+    public let labelFormat: LabelFormat?
+    public let displayName: String?
     public var status: Status
     public var errorMessage: String?
 
@@ -29,6 +31,8 @@ public struct PrintJob: Identifiable, Codable, Equatable, Sendable {
         sourceURL: URL,
         sourceFingerprint: String,
         createdAt: Date = Date(),
+        labelFormat: LabelFormat? = nil,
+        displayName: String? = nil,
         status: Status = .ready,
         errorMessage: String? = nil
     ) {
@@ -36,7 +40,17 @@ public struct PrintJob: Identifiable, Codable, Equatable, Sendable {
         self.sourceURL = sourceURL
         self.sourceFingerprint = sourceFingerprint
         self.createdAt = createdAt
+        self.labelFormat = labelFormat
+        self.displayName = displayName
         self.status = status
         self.errorMessage = errorMessage
+    }
+
+    public var resolvedLabelFormat: LabelFormat {
+        labelFormat ?? .shipping100x150
+    }
+
+    public var title: String {
+        displayName ?? sourceURL.lastPathComponent
     }
 }

@@ -19,13 +19,12 @@ INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_SOURCE="$ROOT_DIR/Resources/AppIcon-1024.png"
 UNIVERSAL_BUILD_DIR="$ROOT_DIR/.build-universal"
 
-SWIFT_BASE_ARGS=(
+SWIFT_BUILD_ARGS=(
   --disable-sandbox
   -c "$CONFIGURATION"
   -debug-info-format none
   --product "$APP_NAME"
 )
-SWIFT_COMPAT_ARGS=()
 
 # The currently installed standalone Command Line Tools expose a newer compiler
 # patch than their default macOS 27 SDK and do not ship SwiftUI's macro plugin.
@@ -35,7 +34,7 @@ if [[ ! -d "/Applications/Xcode.app" && -d "/Library/Developer/CommandLineTools/
   export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.cache/clang-15"
   export SWIFTPM_MODULECACHE_OVERRIDE="$CLANG_MODULE_CACHE_PATH"
   mkdir -p "$CLANG_MODULE_CACHE_PATH"
-  SWIFT_COMPAT_ARGS=(
+  SWIFT_BUILD_ARGS+=(
     -Xswiftc -Xfrontend
     -Xswiftc -interface-compiler-version
     -Xswiftc -Xfrontend
@@ -59,17 +58,15 @@ for ARCHITECTURE in "${TARGET_ARCHITECTURES[@]}"; do
 
   echo "Building $APP_NAME for $ARCHITECTURE..."
   swift build \
-    "${SWIFT_BASE_ARGS[@]}" \
+    "${SWIFT_BUILD_ARGS[@]}" \
     --scratch-path "$SCRATCH_PATH" \
-    --triple "$TARGET_TRIPLE" \
-    "${SWIFT_COMPAT_ARGS[@]}"
+    --triple "$TARGET_TRIPLE"
 
   BIN_PATH="$(swift build \
-    "${SWIFT_BASE_ARGS[@]}" \
+    "${SWIFT_BUILD_ARGS[@]}" \
     --scratch-path "$SCRATCH_PATH" \
     --triple "$TARGET_TRIPLE" \
-    --show-bin-path \
-    "${SWIFT_COMPAT_ARGS[@]}")"
+    --show-bin-path)"
   BUILD_BINARIES+=("$BIN_PATH/$APP_NAME")
 done
 

@@ -90,13 +90,21 @@ Notarisierung durch Apple. Weitere Informationen:
 
 - scans for nearby Bluetooth Low Energy devices
 - prioritizes devices named `RW403B` or `MUNBYN`
-- discovers the writable GATT characteristic instead of assuming one firmware layout
-- prefers the common TSPL print characteristic `FF02` when present
-- generates a TSPL connection test label
+- uses the RW403B BLE service `ABF0` with `ABF1` for control commands,
+  `ABF3` for printer responses and `ABF4` for print data
+- performs the required device-information handshake before enabling printing
+- reads the printer status and reports conditions such as an open cover,
+  overheating or paper that is not recognized
+- encodes raster jobs with the MUNBYN message framing and Heatshrink compression
+- waits for the printer acknowledgement after every raster section
+- generates a real raster test label in the selected size
 - imports PDF, PNG and JPEG files
-- rasterizes the first page at 203 dpi (800 × 1200 dots)
-- transfers bitmap jobs in Bluetooth-sized chunks
-- persists the print queue and prevents accidental duplicate imports
+- imports Etsy order CSV files and creates selectable sender/recipient labels
+- offers presets for 100 × 150, 100 × 50, 89 × 36, 70 × 36 and 50 × 50 mm
+- supports custom sizes from 20–108 mm wide and 15–300 mm high
+- rasterizes each job at the RW403B resolution of 8 dots/mm (203 dpi)
+- transfers bitmap jobs in BLE-sized packets
+- stores the chosen format with every print job and prevents accidental duplicate imports
 - records discovered services and characteristics for first-device diagnostics
 - includes a custom macOS app icon
 - builds as a Universal 2 app for Apple Silicon and Intel Macs
@@ -141,12 +149,74 @@ swift run LabelCoreSelfTest
 
 The first Bluetooth scan triggers the macOS Bluetooth permission dialog. The app bundle contains the required privacy descriptions.
 
+## Etikettenformate
+
+Das Format wird auf der Seite **Drucken** vor dem Import ausgewählt. Es gilt für
+neu importierte Dateien, Etsy-Adressetiketten und das Testetikett. Bereits in
+der Warteschlange liegende Aufträge behalten ihre ursprüngliche Größe.
+
+Neben den fünf Vorlagen kann **Eigenes Format** gewählt werden. Die Breite ist
+auf den Druckbereich des RW403B von maximal 108 mm begrenzt. PDF- und
+Bildinhalte werden proportional eingepasst und nicht verzerrt.
+
+## Etsy-Bestellungen importieren
+
+1. In Etsy **Shop-Manager → Einstellungen → Optionen → Daten herunterladen**
+   öffnen.
+2. Unter **Bestellungen** als CSV-Typ **Bestellungen** wählen, Zeitraum angeben
+   und **CSV herunterladen** auswählen.
+3. In Munbyn Labeler **Etsy-Bestellungen …** anklicken und diese CSV öffnen.
+4. Die gewünschten Bestellungen markieren.
+5. **Brief / Adressetikett** oder **DHL-Paketlabel** auswählen.
+6. Für ein Briefetikett den Absender ergänzen, das Etikettenformat wählen und
+   die Etiketten erzeugen. Sie erscheinen danach in der Warteschlange.
+
+Die aktuelle Etsy-Anleitung für den Export befindet sich unter
+[How Do I Download My Etsy Data?](https://help.etsy.com/hc/en-us/articles/360035753053-How-Do-I-Download-My-Etsy-Data).
+
+Eine Etsy-CSV enthält keine gekaufte DHL-Frankierung. Für **DHL-Paketlabel**
+muss das Label weiterhin bei DHL gekauft und anschließend als PDF importiert
+werden. Etsy-CSV und erzeugte Adressetiketten werden ausschließlich lokal
+verarbeitet. Die PDFs liegen unter:
+
+```text
+~/Library/Application Support/MunbynLabeler/Etsy Labels/
+```
+
 ## First printer test
 
 1. Turn on the RW403B and keep it close to the Mac.
 2. Open **Drucken** and select **Geräte suchen**.
 3. Connect to the device whose name contains `RW403B`.
-4. If the state becomes **Drucker verbunden**, choose **Testetikett**.
-5. If no writable channel is found, copy the entries from **Bluetooth-Diagnose**. They identify whether this firmware needs a serial Bluetooth transport instead of BLE GATT.
+4. Wait until the state becomes **Drucker verbunden**. The line below it also
+   shows the status reported by the printer.
+5. If no warning is shown, choose **Testetikett**.
+6. If the connection fails, copy the entries from **Bluetooth-Diagnose**.
 
-No real print is performed during automated tests. Physical output, orientation, density and the printer firmware's exact Bluetooth profile must be verified with the device present.
+The BLE transport and the device-information handshake have been verified with
+a real `RW403B-NE801`: the printer acknowledges both control commands with
+status `200`. During initial integration the device reported an unrecognized
+paper roll and an open cover; the app correctly blocked raster transfer and
+surfaced both conditions instead of reporting a false success.
+
+## Troubleshooting: Papier wird nicht erkannt
+
+If the app shows **Papier wird nicht erkannt**, Bluetooth is already working.
+The message comes directly from the RW403B status response. Calibrate the paper
+sensor before trying another test label:
+
+1. Switch the printer off and remove the labels.
+2. Hold the **FEED** button while switching the printer on.
+3. Release **FEED** immediately after the beep.
+4. Let the automatic calibration finish without pressing another button.
+5. After the printer stops, wait five seconds and restart it.
+6. Load at least eight consecutive labels, guide them straight through the
+   paper guides and close the cover.
+7. Hold **FEED** until the printer beeps so it can learn the label gap.
+8. Reconnect in Munbyn Labeler. The paper warning should disappear before
+   **Testetikett** is pressed.
+
+MUNBYN's official instructions are available in
+[RW403B sensor calibration](https://support.munbyn.com/hc/en-us/articles/52525254689043-How-to-Fix-Red-Light-Paper-Recognition-Failure-via-Printer-Sensor-Calibration)
+and
+[label-size and paper learning](https://support.munbyn.com/hc/en-us/articles/41520136801299-How-to-create-a-new-customized-label-size).

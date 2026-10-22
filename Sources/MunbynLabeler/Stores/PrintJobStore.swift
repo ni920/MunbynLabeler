@@ -16,15 +16,31 @@ final class PrintJobStore: ObservableObject {
     }
 
     @discardableResult
-    func enqueue(url: URL) throws -> PrintJob {
-        let fingerprint = try FileFingerprint.sha256LikeFingerprint(for: url)
+    func enqueue(
+        url: URL,
+        labelFormat: LabelFormat,
+        displayName: String? = nil,
+        sourceFingerprint: String? = nil
+    ) throws -> PrintJob {
+        let fileFingerprint: String
+        if let sourceFingerprint {
+            fileFingerprint = sourceFingerprint
+        } else {
+            fileFingerprint = try FileFingerprint.sha256LikeFingerprint(for: url)
+        }
+        let fingerprint = "\(fileFingerprint)|\(labelFormat.widthDots)x\(labelFormat.heightDots)"
         if let existing = jobs.first(where: {
             $0.sourceFingerprint == fingerprint && $0.status != .failed
         }) {
             return existing
         }
 
-        let job = PrintJob(sourceURL: url, sourceFingerprint: fingerprint)
+        let job = PrintJob(
+            sourceURL: url,
+            sourceFingerprint: fingerprint,
+            labelFormat: labelFormat,
+            displayName: displayName
+        )
         jobs.insert(job, at: 0)
         persist()
         return job

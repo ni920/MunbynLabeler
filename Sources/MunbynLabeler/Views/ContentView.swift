@@ -58,10 +58,29 @@ struct ContentView: View {
             case .failure(let error): appStore.lastMessage = error.localizedDescription
             }
         }
+        .fileImporter(
+            isPresented: $appStore.showEtsyImporter,
+            allowedContentTypes: [.commaSeparatedText],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { appStore.loadEtsyCSV(url) }
+            case .failure(let error): appStore.lastMessage = error.localizedDescription
+            }
+        }
+        .sheet(isPresented: $appStore.showEtsyImportReview) {
+            EtsyImportView(appStore: appStore)
+        }
         .toolbar {
             ToolbarItemGroup {
-                Button {
-                    appStore.showImporter = true
+                Menu {
+                    Button("PDF oder Bild …") {
+                        appStore.showImporter = true
+                    }
+                    Button("Etsy-Bestellungen (CSV) …") {
+                        appStore.showEtsyImporter = true
+                    }
                 } label: {
                     Label("Importieren", systemImage: "plus")
                 }

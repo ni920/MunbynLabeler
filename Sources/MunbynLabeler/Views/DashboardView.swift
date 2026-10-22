@@ -20,6 +20,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 connectionCard
+                formatCard
                 importCard
                 if let message = appStore.lastMessage {
                     Label(message, systemImage: "info.circle")
@@ -34,11 +35,24 @@ struct DashboardView: View {
         .navigationTitle("Drucken")
     }
 
+    private var formatCard: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "rectangle.and.pencil.and.ellipsis")
+                .font(.system(size: 22))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 34)
+            LabelFormatControls(appStore: appStore)
+            Spacer()
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Etiketten ohne Umweg")
                 .font(.system(size: 30, weight: .semibold, design: .rounded))
-            Text("RW403B verbinden, PDF oder Bild ablegen und direkt per Bluetooth drucken.")
+            Text("Format wählen und Etsy-Bestellungen, PDF oder Bild direkt per Bluetooth drucken.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
         }
@@ -111,10 +125,10 @@ struct DashboardView: View {
                         .frame(width: 150, height: 190)
 
                     VStack(alignment: .leading, spacing: 9) {
-                        Text(job.sourceURL.lastPathComponent)
+                        Text(job.title)
                             .font(.headline)
                             .lineLimit(2)
-                        Text("100 × 150 mm · 203 dpi · \(job.status.label)")
+                        Text("\(job.resolvedLabelFormat.sizeDescription) · 203 dpi · \(job.status.label)")
                             .foregroundStyle(.secondary)
                         if let error = job.errorMessage {
                             Text(error)
@@ -139,14 +153,19 @@ struct DashboardView: View {
                 Image(systemName: "doc.badge.plus")
                     .font(.system(size: 36, weight: .light))
                     .foregroundStyle(.secondary)
-                Text("PDF oder Bild hier ablegen")
+                Text("PDF, Bild oder Etsy-CSV hier ablegen")
                     .font(.title3.weight(.medium))
-                Text("Die erste PDF-Seite wird automatisch auf das 4×6-Zoll-Etikett eingepasst.")
+                Text("Dateien werden auf das gewählte Format eingepasst. Etsy-CSV-Dateien öffnen die Bestellauswahl.")
                     .foregroundStyle(.secondary)
-                Button("Datei auswählen …") {
-                    appStore.showImporter = true
+                HStack {
+                    Button("PDF oder Bild …") {
+                        appStore.showImporter = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Etsy-Bestellungen …") {
+                        appStore.showEtsyImporter = true
+                    }
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .frame(maxWidth: .infinity, minHeight: 250)

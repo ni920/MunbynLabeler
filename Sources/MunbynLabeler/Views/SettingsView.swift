@@ -10,8 +10,17 @@ struct SettingsView: View {
                 Stepper("Druckdichte: \(appStore.density)", value: $appStore.density, in: 1...15)
             }
             Section("Etikettenformat") {
-                LabeledContent("Größe", value: "100 × 150 mm")
-                LabeledContent("Auflösung", value: "203 dpi / 800 × 1200 Punkte")
+                LabelFormatControls(appStore: appStore, showHeading: false)
+            }
+            Section("Absender für Etsy-Briefetiketten") {
+                TextField("Name oder Firma", text: $appStore.senderName)
+                TextField("Straße und Hausnummer", text: $appStore.senderStreet)
+                HStack {
+                    TextField("PLZ", text: $appStore.senderPostalCode)
+                        .frame(width: 80)
+                    TextField("Ort", text: $appStore.senderCity)
+                }
+                TextField("Land", text: $appStore.senderCountry)
             }
         }
     }

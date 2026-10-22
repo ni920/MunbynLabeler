@@ -18,12 +18,73 @@ enum LabelRendererError: LocalizedError {
 }
 
 enum LabelRenderer {
+    static func testPattern(
+        format: LabelFormat = .shipping100x150
+    ) -> LabelRaster {
+        let width = format.widthDots
+        let height = format.heightDots
+        let bytesPerRow = (width + 7) / 8
+        var bitmap = Data(count: bytesPerRow * height)
+
+        func fillRect(x: Int, y: Int, width rectWidth: Int, height rectHeight: Int) {
+            let minX = max(0, x)
+            let maxX = min(width, x + rectWidth)
+            let minY = max(0, y)
+            let maxY = min(height, y + rectHeight)
+            guard minX < maxX, minY < maxY else { return }
+            for row in minY..<maxY {
+                for column in minX..<maxX {
+                    bitmap[row * bytesPerRow + column / 8] |= 0x80 >> UInt8(column % 8)
+                }
+            }
+        }
+
+        let inset = 28
+        let line = 5
+        fillRect(x: inset, y: inset, width: width - 2 * inset, height: line)
+        fillRect(x: inset, y: height - inset - line, width: width - 2 * inset, height: line)
+        fillRect(x: inset, y: inset, width: line, height: height - 2 * inset)
+        fillRect(x: width - inset - line, y: inset, width: line, height: height - 2 * inset)
+
+        let glyphs: [[String]] = [
+            ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+            ["10001", "10010", "10100", "11000", "10100", "10010", "10001"]
+        ]
+        let scale = max(5, min(width / 15, height / 12))
+        let glyphWidth = 5 * scale
+        let gap = scale
+        let totalWidth = glyphs.count * glyphWidth + (glyphs.count - 1) * gap
+        let originX = (width - totalWidth) / 2
+        let originY = (height - 7 * scale) / 2
+
+        for (glyphIndex, rows) in glyphs.enumerated() {
+            for (row, values) in rows.enumerated() {
+                for (column, value) in values.enumerated() where value == "1" {
+                    fillRect(
+                        x: originX + glyphIndex * (glyphWidth + gap) + column * scale,
+                        y: originY + row * scale,
+                        width: scale,
+                        height: scale
+                    )
+                }
+            }
+        }
+
+        let decorativeWidth = min(width - 2 * inset, scale * 9)
+        fillRect(x: width / 2 - decorativeWidth / 2, y: max(inset + line + 10, originY - scale * 2), width: decorativeWidth, height: max(3, scale / 5))
+        fillRect(x: width / 2 - decorativeWidth / 3, y: max(inset + line + 18, originY - scale), width: decorativeWidth * 2 / 3, height: max(3, scale / 5))
+        fillRect(x: width / 2 - scale, y: min(height - inset - line - 12, originY + 8 * scale), width: 2 * scale, height: max(4, scale / 4))
+
+        return LabelRaster(width: width, height: height, bytesPerRow: bytesPerRow, bitmap: bitmap)
+    }
+
     static func render(
         url: URL,
-        width: Int = TSPLCommandBuilder.defaultWidthDots,
-        height: Int = TSPLCommandBuilder.defaultHeightDots,
+        format: LabelFormat = .shipping100x150,
         threshold: UInt8 = 170
     ) throws -> LabelRaster {
+        let width = format.widthDots
+        let height = format.heightDots
         var grayscale = [UInt8](repeating: 255, count: width * height)
         guard let context = CGContext(
             data: &grayscale,
