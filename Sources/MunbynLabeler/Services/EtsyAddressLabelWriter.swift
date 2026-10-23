@@ -127,9 +127,8 @@ enum EtsyAddressLabelWriter {
                 height: senderHeight
             ),
             maximumFontSize: senderFontSize,
-            minimumFontSize: 5.5,
-            context: context,
-            underline: true
+            minimumFontSize: 5.0,
+            context: context
         )
 
         let separatorY = mediaBox.height - margin - senderHeight - 4
@@ -237,8 +236,7 @@ enum EtsyAddressLabelWriter {
         in rect: CGRect,
         maximumFontSize: CGFloat,
         minimumFontSize: CGFloat,
-        context: CGContext,
-        underline: Bool = false
+        context: CGContext
     ) {
         var fontSize = maximumFontSize
         while fontSize > minimumFontSize {
@@ -250,14 +248,11 @@ enum EtsyAddressLabelWriter {
 
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byClipping
-        var attributes: [NSAttributedString.Key: Any] = [
+        let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: fontSize),
             .foregroundColor: NSColor.black,
             .paragraphStyle: paragraph
         ]
-        if underline {
-            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
-        }
         let attributed = NSAttributedString(string: text, attributes: attributes)
         let line = CTLineCreateWithAttributedString(attributed)
         var ascent: CGFloat = 0

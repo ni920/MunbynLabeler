@@ -30,9 +30,9 @@ private struct GeneralSettingsView: View {
                 Stepper("Druckdichte: \(appStore.density)", value: $appStore.density, in: 1...15)
             }
 
-            Section("Briefformat") {
+            Section("Etikettenmaterial") {
                 LabelFormatControls(appStore: appStore, showHeading: false)
-                Text("Paketlabel werden unabhängig davon immer mit 100 × 150 mm gedruckt.")
+                Text("Paketlabel werden immer mit 100 × 150 mm gedruckt.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

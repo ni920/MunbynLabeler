@@ -152,6 +152,7 @@ Notarisierung durch Apple. Weitere Informationen:
 - shows a review step for choosing letter or parcel before applying browser data
 - previews the exact black-and-white 203-dpi raster before every label print
 - offers presets for 100 × 150, 100 × 50, 89 × 36, 70 × 36 and 50 × 50 mm
+- supports a 100-mm continuous roll: letters use 100 × 55 mm and parcels use 100 × 150 mm without changing rolls
 - supports custom sizes from 20–108 mm wide and 15–300 mm high
 - rasterizes each job at the RW403B resolution of 8 dots/mm (203 dpi)
 - transfers bitmap jobs in BLE-sized packets
@@ -247,11 +248,24 @@ erforderlich.
 
 ## Etikettenformate
 
-Das kleinere Briefformat wird auf der Seite **Drucken** ausgewählt und gilt für
-neu erstellte Etsy-Adressetiketten. **89 × 36 mm** ist die Standardgröße. Für
-Briefe stehen vier kompakte Vorlagen sowie **Eigenes Format** zur Verfügung.
-Bereits in der Warteschlange liegende Aufträge behalten ihre ursprüngliche
-Größe.
+Unter **Etikettenmaterial** kann zwischen vorgestanzten Etiketten und einer
+**100-mm-Endlosrolle** gewählt werden. Im Endlosmodus erzeugt die App ein
+Briefetikett mit **100 × 55 mm** und ein Paketetikett mit **100 × 150 mm**.
+Damit kann dieselbe Rolle für beide Versandarten im Drucker bleiben. Da der
+RW403B keinen automatischen Schneider besitzt, wird das Endlosetikett nach dem
+Druck an der Abrisskante manuell getrennt.
+
+Die Endlosrolle wird von außen zugeführt. Vor dem ersten Druck müssen die
+Papierführungen auf die Rollenbreite eingestellt und die Papiererkennung des
+Druckers für das eingelegte Material kalibriert werden. Zunächst sollte ein
+einzelnes Testetikett gedruckt und die tatsächlich ausgegebene Länge geprüft
+werden.
+
+Bei vorgestanzten Etiketten wird das kleinere Briefformat auf der Seite
+**Drucken** ausgewählt und gilt für neu erstellte Etsy-Adressetiketten.
+**89 × 36 mm** ist die Standardgröße. Für Briefe stehen vier kompakte Vorlagen
+sowie **Eigenes Format** zur Verfügung. Bereits in der Warteschlange liegende
+Aufträge behalten ihre ursprüngliche Größe.
 
 DHL-Paketlabel werden unabhängig vom Briefformat immer als **100 × 150 mm**
 importiert. Die Breite eigener Formate ist auf den Druckbereich des RW403B von

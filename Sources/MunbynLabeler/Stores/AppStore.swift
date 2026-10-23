@@ -4,6 +4,20 @@ import LabelCore
 
 @MainActor
 final class AppStore: ObservableObject {
+    enum LabelStockMode: String, CaseIterable, Identifiable {
+        case dieCut
+        case continuous100
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .dieCut: "Vorgestanzte Etiketten"
+            case .continuous100: "Endlosrolle 100 mm"
+            }
+        }
+    }
+
     @Published var showImporter = false
     @Published var showEtsyImporter = false
     @Published var showEtsyImportReview = false
@@ -19,6 +33,9 @@ final class AppStore: ObservableObject {
     }
     @Published var speed = 4
     @Published var density = 8
+    @Published var labelStockMode: LabelStockMode {
+        didSet { defaults.set(labelStockMode.rawValue, forKey: Keys.labelStockMode) }
+    }
     @Published var letterFormatID: String {
         didSet {
             defaults.set(letterFormatID, forKey: Keys.lastLetterFormatID)
@@ -65,6 +82,7 @@ final class AppStore: ObservableObject {
         static let selectedFormatID = "selectedLabelFormatID"
         static let lastLetterFormatID = "lastLetterLabelFormatID"
         static let selectedShipmentKind = "selectedShipmentKind"
+        static let labelStockMode = "labelStockMode"
         static let customWidthMM = "customLabelWidthMM"
         static let customHeightMM = "customLabelHeightMM"
         static let senderName = "senderName"
@@ -80,6 +98,9 @@ final class AppStore: ObservableObject {
             rawValue: defaults.string(forKey: Keys.selectedShipmentKind) ?? ""
         ) ?? .letter
         selectedShipmentKind = initialShipmentKind
+        labelStockMode = LabelStockMode(
+            rawValue: defaults.string(forKey: Keys.labelStockMode) ?? ""
+        ) ?? .dieCut
         let storedLetterFormatID = defaults.string(forKey: Keys.lastLetterFormatID)
             ?? defaults.string(forKey: Keys.selectedFormatID)
         letterFormatID = LabelFormat.normalizedLetterFormatID(storedLetterFormatID)
@@ -97,6 +118,9 @@ final class AppStore: ObservableObject {
     }
 
     var selectedLetterLabelFormat: LabelFormat {
+        if labelStockMode == .continuous100 {
+            return .continuousLetter100x55
+        }
         if letterFormatID == "custom" {
             return .custom(widthMM: customWidthMM, heightMM: customHeightMM)
         }

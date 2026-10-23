@@ -26,6 +26,12 @@ struct PrintPreviewView: View {
                 Divider()
 
                 LabeledContent("Format", value: job.resolvedLabelFormat.sizeDescription)
+                if job.resolvedLabelFormat.id == LabelFormat.continuousLetter100x55.id {
+                    LabeledContent("Material", value: "Endlosrolle")
+                    Label("Nach dem Druck an der Abrisskante manuell trennen.", systemImage: "scissors")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 LabeledContent("Auflösung", value: "203 dpi")
                 LabeledContent("Druckdichte", value: "\(appStore.density)")
                 LabeledContent("Geschwindigkeit", value: "\(appStore.speed)")

@@ -28,6 +28,12 @@ public struct LabelFormat: Codable, Equatable, Hashable, Identifiable, Sendable 
         widthMM: 100,
         heightMM: 50
     )
+    public static let continuousLetter100x55 = LabelFormat(
+        id: "continuous-letter-100x55",
+        name: "Endlosrolle · Brief 100 × 55 mm",
+        widthMM: 100,
+        heightMM: 55
+    )
     public static let square50 = LabelFormat(
         id: "square-50x50",
         name: "Quadratisch 50 × 50 mm",
@@ -37,6 +43,7 @@ public struct LabelFormat: Codable, Equatable, Hashable, Identifiable, Sendable 
 
     public static let presets: [LabelFormat] = [
         .shipping100x150,
+        .continuousLetter100x55,
         .address89x36,
         .address70x36,
         .product100x50,
@@ -49,6 +56,8 @@ public struct LabelFormat: Codable, Equatable, Hashable, Identifiable, Sendable 
         .product100x50,
         .square50
     ]
+
+    public static let continuousRollWidthMM = 100.0
 
     public static func normalizedLetterFormatID(_ storedID: String?) -> String {
         guard let storedID else { return address89x36.id }

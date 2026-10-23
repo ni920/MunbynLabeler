@@ -86,10 +86,12 @@ struct ShippingFormView: View {
                 LabelFormatControls(appStore: appStore, showHeading: false)
                     .padding(8)
             } label: {
-                Label("Etikettenformat", systemImage: "rectangle.and.pencil.and.ellipsis")
+                Label("Etikettenmaterial", systemImage: "rectangle.and.pencil.and.ellipsis")
             }
 
-            Text("89 × 36 mm ist eine kompakte Briefgröße. Die App merkt sich dein zuletzt gewähltes Briefformat; Paketlabel bleiben bei 100 × 150 mm.")
+            Text(appStore.labelStockMode == .continuous100
+                ? "Mit der Endlosrolle nutzt die App automatisch 55 mm Länge für Briefe und 150 mm für Pakete. Du musst die Rolle nicht wechseln."
+                : "89 × 36 mm ist eine kompakte Briefgröße. Die App merkt sich dein zuletzt gewähltes Briefformat; Paketlabel bleiben bei 100 × 150 mm.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
