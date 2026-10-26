@@ -80,23 +80,20 @@ und Unversehrtheit bekannt sind.
 
 ### Aktualisierung
 
-Version 0.6.0 enthält den signierten Sparkle-Updater. Das Quell-Repository und
-seine GitHub-Releases sind derzeit jedoch privat. Sparkle kann den Update-Feed
-deshalb nicht ohne GitHub-Anmeldung abrufen; **Nach Updates suchen …** kann in
-diesem Zustand einen Abruffehler anzeigen. Bis ein separater öffentlicher
-Release-Feed bereitsteht, müssen neue Versionen manuell installiert werden.
-
-Version 0.6.0 muss einmal wie bisher manuell installiert werden:
+Version 0.6.2 enthält den signierten Sparkle-Updater und bezieht den öffentlichen
+Update-Feed aus dem jeweils neuesten GitHub-Release. Von älteren Versionen, bei
+denen der automatische Abruf noch nicht funktioniert, muss Version 0.6.2 einmal
+manuell installiert werden:
 
 1. Munbyn Labeler beenden.
 2. Das neue ZIP-Archiv entpacken.
 3. Die neue `MunbynLabeler.app` über die vorhandene App im Programme-Ordner
    kopieren und **Ersetzen** bestätigen.
 
-Sobald ein öffentlicher Release-Feed eingerichtet ist, kann der integrierte
-Updater weitere Versionen übernehmen. Update-Archive und der Update-Feed werden
-mit einem separaten Sparkle-Ed25519-Schlüssel signiert. Ein persönlicher
-GitHub-Zugriffsschlüssel wird weder in der App gespeichert noch verteilt.
+Danach kann der integrierte Updater weitere Versionen übernehmen. Update-Archive
+und der Update-Feed werden mit einem separaten Sparkle-Ed25519-Schlüssel
+signiert. Ein persönlicher GitHub-Zugriffsschlüssel wird weder in der App
+gespeichert noch verteilt.
 
 Die Druckwarteschlange bleibt bei einem App-Update erhalten, da sie getrennt
 von der App unter folgendem Pfad gespeichert wird:
