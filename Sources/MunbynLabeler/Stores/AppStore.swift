@@ -117,6 +117,10 @@ final class AppStore: ObservableObject {
         selectedShipmentKind == .parcel ? .shipping100x150 : selectedLetterLabelFormat
     }
 
+    var selectedPaperType: MunbynPaperType {
+        labelStockMode == .continuous100 ? .continuous : .gap
+    }
+
     var selectedLetterLabelFormat: LabelFormat {
         if labelStockMode == .continuous100 {
             return .continuousLetter100x55
@@ -210,7 +214,10 @@ final class AppStore: ObservableObject {
 
     func printTestLabel() {
         lastMessage = "Testetikett wird für den RW403B vorbereitet …"
-        bluetooth.printRaster(LabelRenderer.testPattern(format: selectedLabelFormat)) { [weak self] result in
+        bluetooth.printRaster(
+            LabelRenderer.testPattern(format: selectedLabelFormat),
+            paperType: selectedPaperType
+        ) { [weak self] result in
             switch result {
             case .success:
                 self?.lastMessage = "Testetikett wurde vom RW403B gedruckt."
@@ -231,7 +238,7 @@ final class AppStore: ObservableObject {
 
         do {
             let raster = try LabelRenderer.render(url: job.sourceURL, format: job.resolvedLabelFormat)
-            bluetooth.printRaster(raster) { [weak self] result in
+            bluetooth.printRaster(raster, paperType: selectedPaperType) { [weak self] result in
                 guard let self else { return }
                 switch result {
                 case .success:

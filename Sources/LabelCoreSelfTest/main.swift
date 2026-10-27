@@ -103,6 +103,26 @@ do {
     let selfTestPayloads = frameDecoder.append(selfTestFrame)
     try require(selfTestPayloads == [Data([0x08, 0x02])], "RW403B self-test frame is invalid")
 
+    var paperTypeFrameDecoder = MunbynFrameDecoder()
+    let continuousPaperPayloads = paperTypeFrameDecoder.append(
+        MunbynRW403BProtocol.paperTypeFrame(.continuous)
+    )
+    try require(continuousPaperPayloads.count == 1, "RW403B paper-type frame is invalid")
+    try require(
+        continuousPaperPayloads.first.flatMap { protobufVarintField(1, in: $0) } == 11,
+        "RW403B paper-type event is missing"
+    )
+    try require(
+        continuousPaperPayloads.first.flatMap { protobufVarintField(4, in: $0) } == 4,
+        "RW403B continuous-paper value is not encoded as sint32 value 2"
+    )
+
+    var cancelFrameDecoder = MunbynFrameDecoder()
+    try require(
+        cancelFrameDecoder.append(MunbynRW403BProtocol.cancelPrintingFrame()) == [Data([0x08, 0x05])],
+        "RW403B cancel-printing frame is invalid"
+    )
+
     let sections = MunbynRW403BProtocol.printSections(raster: raster, maximumImageChunkLength: 40)
     try require(!sections.isEmpty, "RW403B raster produced no sections")
     try require(sections.allSatisfy { !$0.frames.isEmpty }, "RW403B raster section has no frames")
@@ -118,6 +138,12 @@ do {
     try require(
         MunbynRW403BProtocol.parseResponse(completedPrintReport) == .printStatus("0"),
         "RW403B completed-print report was not recognized"
+    )
+    let continuousDeviceInfo = Data([0x08, 0x01, 0x1A, 0x02, 0x50, 0x02])
+    try require(
+        MunbynRW403BProtocol.parseResponse(continuousDeviceInfo)
+            == .deviceInfo(printStatus: 0, paperStatus: 0, paperType: 2, firmware: ""),
+        "RW403B continuous-paper device info was not recognized"
     )
 
     let addressFormat = LabelFormat.address89x36
@@ -186,7 +212,7 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 46 checks passed")
+    print("LabelCoreSelfTest: 51 checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)

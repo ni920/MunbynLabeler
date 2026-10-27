@@ -15,6 +15,7 @@ public enum MunbynRW403BProtocol {
         case printingSpeed = 8
         case printConcentration = 9
         case printEnd = 10
+        case paperTypeSet = 11
     }
 
     public static func selfTestFrame() -> Data {
@@ -27,6 +28,18 @@ public enum MunbynRW403BProtocol {
 
     public static func printEndFrame() -> Data {
         frame(sendMessage(event: .printEnd))
+    }
+
+    public static func cancelPrintingFrame() -> Data {
+        frame(sendMessage(event: .cancelPrinting))
+    }
+
+    public static func paperTypeFrame(_ paperType: MunbynPaperType) -> Data {
+        // MUNBYN's Web Editor sends PAPERTYPESET (event 11) with the selected
+        // type in MPSendMsg.sendInt (protobuf sint32 field 4). Its optional
+        // MPPaperTypeMsg payload contains only zero values and therefore
+        // serializes to an empty byte sequence.
+        frame(sendMessage(event: .paperTypeSet, sendInt: paperType.rawValue))
     }
 
     public static func printSections(
@@ -108,6 +121,7 @@ public enum MunbynRW403BProtocol {
             return .deviceInfo(
                 printStatus: info.printStatus,
                 paperStatus: info.paperStatus,
+                paperType: info.paperType,
                 firmware: info.firmware
             )
         }
@@ -138,10 +152,13 @@ public enum MunbynRW403BProtocol {
         return (code, info)
     }
 
-    private static func parseDeviceInfo(_ data: Data) -> (printStatus: Int, paperStatus: Int, firmware: String) {
+    private static func parseDeviceInfo(
+        _ data: Data
+    ) -> (printStatus: Int, paperStatus: Int, paperType: Int, firmware: String) {
         var reader = ProtobufReader(data: data)
         var printStatus = 0
         var paperStatus = 0
+        var paperType = 0
         var firmware = ""
         while let field = reader.nextField() {
             switch (field.number, field.wireType) {
@@ -155,15 +172,23 @@ public enum MunbynRW403BProtocol {
                    let value = String(data: bytes, encoding: .utf8) {
                     printStatus = Int(value) ?? 0
                 }
+            case (10, 0): paperType = Int(reader.readVarint() ?? 0)
             default: reader.skip(wireType: field.wireType)
             }
         }
-        return (printStatus, paperStatus, firmware)
+        return (printStatus, paperStatus, paperType, firmware)
     }
 
-    private static func sendMessage(event: Event, payload: Data = Data()) -> Data {
+    private static func sendMessage(
+        event: Event,
+        sendInt: Int? = nil,
+        payload: Data = Data()
+    ) -> Data {
         var writer = ProtobufWriter()
         writer.writeVarintField(1, UInt64(event.rawValue))
+        if let sendInt {
+            writer.writeSignedVarintField(4, sendInt)
+        }
         if !payload.isEmpty {
             writer.writeBytesField(5, payload)
         }
@@ -213,6 +238,20 @@ public enum MunbynRW403BProtocol {
     }
 }
 
+public enum MunbynPaperType: Int, Equatable, Sendable {
+    case gap = 1
+    case continuous = 2
+    case blackMark = 3
+
+    public var localizedName: String {
+        switch self {
+        case .gap: "Lückenetiketten"
+        case .continuous: "Endlospapier"
+        case .blackMark: "Schwarzmarkenpapier"
+        }
+    }
+}
+
 public struct MunbynPrintSection: Sendable {
     public let index: Int
     public let uncompressedLength: Int
@@ -228,7 +267,7 @@ public struct MunbynPrintSection: Sendable {
 }
 
 public enum MunbynPrinterResponse: Equatable, Sendable {
-    case deviceInfo(printStatus: Int, paperStatus: Int, firmware: String)
+    case deviceInfo(printStatus: Int, paperStatus: Int, paperType: Int, firmware: String)
     case sectionAccepted
     case printStatus(String)
     case report(code: Int, info: String)
@@ -237,8 +276,8 @@ public enum MunbynPrinterResponse: Equatable, Sendable {
 
     public var diagnosticDescription: String {
         switch self {
-        case .deviceInfo(let printStatus, let paperStatus, let firmware):
-            "Geräteinfo: Druckstatus \(printStatus), Papierstatus \(paperStatus), Firmware \(firmware.isEmpty ? "unbekannt" : firmware)"
+        case .deviceInfo(let printStatus, let paperStatus, let paperType, let firmware):
+            "Geräteinfo: Druckstatus \(printStatus), Papierstatus \(paperStatus), Papiertyp \(paperType), Firmware \(firmware.isEmpty ? "unbekannt" : firmware)"
         case .sectionAccepted: "Datenabschnitt bestätigt"
         case .printStatus(let status): "Druckstatus: \(status)"
         case .report(let code, let info): "Druckermeldung \(code): \(info)"

@@ -52,6 +52,7 @@ enum BluetoothPrinterError: LocalizedError {
     case frameTooLarge(Int, Int)
     case responseTimeout(Int)
     case printCompletionTimeout
+    case paperTypeChangeTimeout
     case printerNotReady(String)
     case printerRejected(String)
 
@@ -67,6 +68,8 @@ enum BluetoothPrinterError: LocalizedError {
             "Der Drucker hat Datenabschnitt \(section) nicht bestätigt."
         case .printCompletionTimeout:
             "Der RW403B hat den abgeschlossenen Druck nicht bestätigt."
+        case .paperTypeChangeTimeout:
+            "Der RW403B hat die Umstellung des Papiertyps nicht bestätigt."
         case .printerNotReady(let detail): "Der RW403B ist nicht druckbereit: \(detail)"
         case .printerRejected(let detail): "Der Drucker hat den Auftrag abgelehnt: \(detail)"
         }
@@ -96,9 +99,15 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
         var phase: PrintPhase = .sending
     }
 
+    private struct PaperTypeTransfer {
+        let target: MunbynPaperType
+        let printTransfer: PrintTransfer
+    }
+
     private enum ActiveTransfer {
         case preparing((Result<Void, Error>) -> Void)
         case selfTest((Result<Void, Error>) -> Void)
+        case settingPaperType(PaperTypeTransfer)
         case print(PrintTransfer)
     }
 
@@ -111,12 +120,15 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     private var notifyCharacteristic: CBCharacteristic?
     private var notificationRequested = false
     private var latestPrintStatus = 0
+    private var latestPaperType: MunbynPaperType?
     private var activeTransfer: ActiveTransfer?
     private var frameDecoder = MunbynFrameDecoder()
     private var connectionHandshakePending = false
     private var connectionHandshakeTimeout: DispatchWorkItem?
     private var sectionAckTimeout: DispatchWorkItem?
     private var printCompletionTimeout: DispatchWorkItem?
+    private var paperTypeWriteTimeout: DispatchWorkItem?
+    private var paperTypeSettleWork: DispatchWorkItem?
     private var pacedWrite: DispatchWorkItem?
     private var reconnectWorkItem: DispatchWorkItem?
     private var reconnectAttempt = 0
@@ -263,7 +275,11 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
         peripheral.writeValue(frame, for: controlCharacteristic, type: .withResponse)
     }
 
-    func printRaster(_ raster: LabelRaster, completion: @escaping (Result<Void, Error>) -> Void) {
+    func printRaster(
+        _ raster: LabelRaster,
+        paperType: MunbynPaperType,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
         guard let peripheral = readyPeripheral() else {
             completion(.failure(BluetoothPrinterError.notConnected))
             return
@@ -289,13 +305,18 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
                 maximumImageChunkLength: imageChunkLength
             )
             DispatchQueue.main.async {
-                self?.beginPreparedPrint(sections, completion: completion)
+                self?.beginPreparedPrint(
+                    sections,
+                    paperType: paperType,
+                    completion: completion
+                )
             }
         }
     }
 
     private func beginPreparedPrint(
         _ sections: [MunbynPrintSection],
+        paperType: MunbynPaperType,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
         guard case .preparing = activeTransfer else { return }
@@ -308,13 +329,43 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
             return
         }
 
-        let totalFrames = sections.reduce(0) { $0 + $1.frames.count }
-        activeTransfer = .print(PrintTransfer(
+        let printTransfer = PrintTransfer(
             sections: sections,
-            totalFrames: totalFrames,
+            totalFrames: sections.reduce(0) { $0 + $1.frames.count },
             completion: completion
+        )
+
+        guard latestPaperType != paperType else {
+            startPreparedPrint(printTransfer)
+            return
+        }
+        guard let peripheral = readyPeripheral(), let controlCharacteristic else {
+            finishTransfer(.failure(BluetoothPrinterError.notConnected))
+            return
+        }
+
+        activeTransfer = .settingPaperType(PaperTypeTransfer(
+            target: paperType,
+            printTransfer: printTransfer
         ))
-        diagnostics.append("Druckauftrag: \(sections.count) Abschnitte, \(totalFrames) Bluetooth-Pakete")
+        transferProgress = 0
+        let frame = MunbynRW403BProtocol.paperTypeFrame(paperType)
+        diagnostics.append("Stelle RW403B auf \(paperType.localizedName) um; danach 3 s Kalibrierzeit")
+        peripheral.writeValue(frame, for: controlCharacteristic, type: .withResponse)
+
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, case .settingPaperType = self.activeTransfer else { return }
+            self.finishTransfer(.failure(BluetoothPrinterError.paperTypeChangeTimeout))
+        }
+        paperTypeWriteTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6, execute: work)
+    }
+
+    private func startPreparedPrint(_ transfer: PrintTransfer) {
+        activeTransfer = .print(transfer)
+        diagnostics.append(
+            "Druckauftrag: \(transfer.sections.count) Abschnitte, \(transfer.totalFrames) Bluetooth-Pakete"
+        )
         sendNextPrintFrame()
     }
 
@@ -370,7 +421,7 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
             guard let self,
                   case .print(let transfer) = self.activeTransfer,
                   transfer.phase == .waitingForSectionAck else { return }
-            self.finishTransfer(.failure(BluetoothPrinterError.responseTimeout(section)))
+            self.abortActivePrint(with: BluetoothPrinterError.responseTimeout(section))
         }
         sectionAckTimeout = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 8, execute: work)
@@ -407,8 +458,9 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     private func handleResponse(_ response: MunbynPrinterResponse) {
         diagnostics.append(response.diagnosticDescription)
         switch response {
-        case .deviceInfo(let printStatus, _, _):
+        case .deviceInfo(let printStatus, _, let paperType, _):
             latestPrintStatus = printStatus
+            latestPaperType = MunbynPaperType(rawValue: paperType)
             printerStatusMessage = printStatus == 0 ? nil : statusDescription(printStatus)
             if connectionHandshakePending, let peripheral = connectedPeripheral {
                 finalizeConnection(for: peripheral)
@@ -434,6 +486,9 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
             }
         case .sectionAccepted:
             acceptCurrentSection()
+        case .acknowledgement(let event, let status)
+            where event == MunbynRW403BProtocol.Event.paperTypeSet.rawValue:
+            diagnostics.append("Papiertyp-Befehl vom RW403B bestätigt (Status \(status))")
         case .error(let detail):
             finishTransfer(.failure(BluetoothPrinterError.printerRejected(detail)))
         default:
@@ -444,14 +499,19 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
     private func finishTransfer(_ result: Result<Void, Error>) {
         sectionAckTimeout?.cancel()
         printCompletionTimeout?.cancel()
+        paperTypeWriteTimeout?.cancel()
+        paperTypeSettleWork?.cancel()
         pacedWrite?.cancel()
         sectionAckTimeout = nil
         printCompletionTimeout = nil
+        paperTypeWriteTimeout = nil
+        paperTypeSettleWork = nil
         pacedWrite = nil
 
         let completion: ((Result<Void, Error>) -> Void)?
         switch activeTransfer {
         case .preparing(let callback), .selfTest(let callback): completion = callback
+        case .settingPaperType(let transfer): completion = transfer.printTransfer.completion
         case .print(let transfer): completion = transfer.completion
         case nil: completion = nil
         }
@@ -467,10 +527,24 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
             guard let self,
                   case .print(let transfer) = self.activeTransfer,
                   transfer.phase == .waitingForPrintCompletion else { return }
-            self.finishTransfer(.failure(BluetoothPrinterError.printCompletionTimeout))
+            self.abortActivePrint(with: BluetoothPrinterError.printCompletionTimeout)
         }
         printCompletionTimeout = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: work)
+    }
+
+    private func abortActivePrint(with error: Error) {
+        if case .print = activeTransfer,
+           let peripheral = readyPeripheral(),
+           let controlCharacteristic {
+            diagnostics.append("Sende RW403B-Druckabbruch über ABF1")
+            peripheral.writeValue(
+                MunbynRW403BProtocol.cancelPrintingFrame(),
+                for: controlCharacteristic,
+                type: .withResponse
+            )
+        }
+        finishTransfer(.failure(error))
     }
 
     private func readyPeripheral() -> CBPeripheral? {
@@ -559,10 +633,15 @@ final class BluetoothPrinterService: NSObject, ObservableObject {
         notifyCharacteristic = nil
         notificationRequested = false
         latestPrintStatus = 0
+        latestPaperType = nil
         printerStatusMessage = nil
         connectionHandshakeTimeout?.cancel()
         connectionHandshakeTimeout = nil
         connectionHandshakePending = false
+        paperTypeWriteTimeout?.cancel()
+        paperTypeWriteTimeout = nil
+        paperTypeSettleWork?.cancel()
+        paperTypeSettleWork = nil
         frameDecoder = MunbynFrameDecoder()
     }
 
@@ -735,6 +814,20 @@ extension BluetoothPrinterService: CBPeripheralDelegate {
         switch activeTransfer {
         case .selfTest:
             finishTransfer(.success(()))
+        case .settingPaperType(let transfer):
+            paperTypeWriteTimeout?.cancel()
+            paperTypeWriteTimeout = nil
+            diagnostics.append("Papiertyp-Befehl übertragen; RW403B kalibriert das Material")
+            let work = DispatchWorkItem { [weak self] in
+                guard let self,
+                      case .settingPaperType(let current) = self.activeTransfer,
+                      current.target == transfer.target else { return }
+                self.latestPaperType = transfer.target
+                self.diagnostics.append("RW403B-Papiertyp aktiv: \(transfer.target.localizedName)")
+                self.startPreparedPrint(transfer.printTransfer)
+            }
+            paperTypeSettleWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
         case .print(let transfer) where transfer.phase == .waitingForPrintCompletion:
             diagnostics.append("Druckende vom Bluetooth-Kanal angenommen")
         default:

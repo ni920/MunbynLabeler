@@ -80,9 +80,9 @@ und Unversehrtheit bekannt sind.
 
 ### Aktualisierung
 
-Version 0.6.2 enthält den signierten Sparkle-Updater und bezieht den öffentlichen
+Version 0.6.3 enthält den signierten Sparkle-Updater und bezieht den öffentlichen
 Update-Feed aus dem jeweils neuesten GitHub-Release. Von älteren Versionen, bei
-denen der automatische Abruf noch nicht funktioniert, muss Version 0.6.2 einmal
+denen der automatische Abruf noch nicht funktioniert, muss Version 0.6.3 einmal
 manuell installiert werden:
 
 1. Munbyn Labeler beenden.
@@ -251,6 +251,14 @@ Briefetikett mit **100 × 55 mm** und ein Paketetikett mit **100 × 150 mm**.
 Damit kann dieselbe Rolle für beide Versandarten im Drucker bleiben. Da der
 RW403B keinen automatischen Schneider besitzt, wird das Endlosetikett nach dem
 Druck an der Abrisskante manuell getrennt.
+
+Ab Version 0.6.3 überträgt die App vor dem Druck außerdem den zum Material
+gehörenden RW403B-Papiertyp über Bluetooth: **Lückenetikett** für vorgestanzte
+Etiketten oder **Endlospapier** für die 100-mm-Rolle. Beim Wechsel des Typs
+kalibriert der Drucker das Material etwa drei Sekunden lang, bevor die
+Rasterdaten gesendet werden. Bleibt während eines Druckauftrags eine
+Bestätigung aus, sendet die App einen echten Bluetooth-Druckabbruch statt nur
+lokal zu stoppen.
 
 Die Endlosrolle wird von außen zugeführt. Vor dem ersten Druck müssen die
 Papierführungen auf die Rollenbreite eingestellt und die Papiererkennung des
