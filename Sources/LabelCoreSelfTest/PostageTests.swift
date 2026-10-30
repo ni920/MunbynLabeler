@@ -97,7 +97,7 @@ func runPostageTests() throws {
                     "Continuous sheet must use the selected 100 × 55 mm cut length")
         let text = page.string! as NSString
         let width = page.selection(for: text.range(of: header))!.bounds(for: page).width
-        try require(abs(width - sourceWidth) < 0.01, "Continuous preparation scaled the postage text")
+        try require(abs(width - sourceWidth) < 0.01, "Continuous preparation text bounds differ: source=\(sourceWidth), output=\(width), text=\(text), bounds=\(bounds)")
     }
     do {
         _ = try PostagePDFService.readStamps(from: postageFixture(in: root, count: 0))
