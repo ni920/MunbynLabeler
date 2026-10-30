@@ -35,6 +35,26 @@ private func postageFixture(in directory: URL, count: Int) throws -> URL {
     return url
 }
 
+// PDFKit selection rectangles can include synthesized trailing spaces and text
+// from clipped neighbouring source stamps. Measure complete visible glyphs only.
+private func visibleTextWidth(_ text: String, on page: PDFPage) throws -> Double {
+    let value = (page.string ?? "") as NSString
+    var search = NSRange(location: 0, length: value.length)
+    while search.length > 0 {
+        let range = value.range(of: text, range: search)
+        guard range.location != NSNotFound else { break }
+        var bounds = CGRect.null
+        for index in range.location..<NSMaxRange(range) {
+            if value.substring(with: NSRange(location: index, length: 1)).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+            bounds = bounds.union(page.characterBounds(at: index))
+        }
+        if !bounds.isNull && page.bounds(for: .mediaBox).contains(bounds) { return bounds.width }
+        let next = NSMaxRange(range)
+        search = NSRange(location: next, length: value.length - next)
+    }
+    throw SelfTestFailure.assertion("No complete visible postage header found")
+}
+
 func runPostageTests() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("postage-tests-\(UUID())")
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -70,8 +90,7 @@ func runPostageTests() throws {
     try require(outputs.count == 3 && Set(outputs.flatMap { $0.1 }) == Set(stamps.map(\.id)), "Generated sheets lost stamp identifiers")
     let header = "IM 01.01.26 1,80"
     let sourcePage = PDFDocument(url: fixture)!.page(at: 0)!
-    let sourceText = sourcePage.string! as NSString
-    let sourceWidth = sourcePage.selection(for: sourceText.range(of: header))!.bounds(for: sourcePage).width
+    let sourceWidth = try visibleTextWidth(header, on: sourcePage)
     for output in outputs {
         guard let document = PDFDocument(url: output.0), let page = document.page(at: 0), let value = page.string else {
             throw SelfTestFailure.assertion("Generated stamp sheet cannot be read")
@@ -79,7 +98,7 @@ func runPostageTests() throws {
         try require(document.pageCount == 1, "Each print job must contain one label")
         try require(abs(page.bounds(for: .mediaBox).width - 100 * 72 / 25.4) < 0.01, "Output label has the wrong size")
         try require(value.components(separatedBy: header).count - 1 == 4, "Generated label is missing stamp text")
-        let width = page.selection(for: (value as NSString).range(of: header))!.bounds(for: page).width
+        let width = try visibleTextWidth(header, on: page)
         try require(abs(width - sourceWidth) < 0.01, "PDF composition scaled the postage text")
     }
     // Continuous-stock preparation must preserve original stamp size and identity
@@ -95,9 +114,8 @@ func runPostageTests() throws {
         let bounds = page.bounds(for: .mediaBox)
         try require(abs(bounds.width - 100 * 72 / 25.4) < 0.01 && abs(bounds.height - 55 * 72 / 25.4) < 0.01,
                     "Continuous sheet must use the selected 100 × 55 mm cut length")
-        let text = page.string! as NSString
-        let width = page.selection(for: text.range(of: header))!.bounds(for: page).width
-        try require(abs(width - sourceWidth) < 0.01, "Continuous preparation text bounds differ: source=\(sourceWidth), output=\(width), text=\(text), bounds=\(bounds)")
+        let width = try visibleTextWidth(header, on: page)
+        try require(abs(width - sourceWidth) < 0.01, "Continuous preparation changed visible text size: source=\(sourceWidth), output=\(width)")
     }
     do {
         _ = try PostagePDFService.readStamps(from: postageFixture(in: root, count: 0))
