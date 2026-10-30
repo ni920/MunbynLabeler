@@ -134,6 +134,40 @@ do {
         printMessage.flatMap { protobufVarintField(6, in: $0) } == 2,
         "RW403B print width must be millimetres, not dot width"
     )
+    try require(
+        printMessage.flatMap { protobufVarintField(10, in: $0) } == UInt64(sections[0].compressedLength * 2),
+        "RW403B section length must contain the transmitted compressed byte count as sint32"
+    )
+    // A full-size letter spans multiple sections. Verify wire lengths against
+    // the actual image payload, including the shorter final packet/section.
+    let letterBitmap = Data((0..<40_000).map { UInt8(($0 / 17) % 256) })
+    let letterRaster = LabelRaster(width: 800, height: 400, bytesPerRow: 100, bitmap: letterBitmap)
+    let letterSections = MunbynRW403BProtocol.printSections(raster: letterRaster, maximumImageChunkLength: 148)
+    try require(letterSections.count > 1, "Letter regression fixture needs multiple sections")
+    var reconstructedLetter = Data()
+    for section in letterSections {
+        var transmittedImage = Data()
+        for frame in section.frames {
+            var decoder = MunbynFrameDecoder()
+            guard let envelope = decoder.append(frame).first,
+                  let message = protobufBytesField(5, in: envelope),
+                  let image = protobufBytesField(2, in: message) else {
+                throw SelfTestFailure.assertion("Letter frame has no image payload")
+            }
+            try require(protobufVarintField(10, in: message) == UInt64(section.compressedLength * 2),
+                        "Section length differs from the compressed payload")
+            try require(protobufVarintField(3, in: message) == UInt64(letterBitmap.count * 2),
+                        "Total image length must remain uncompressed")
+            transmittedImage.append(image)
+        }
+        try require(transmittedImage.count == section.compressedLength, "Missing image bytes in section")
+        guard let decoded = HeatshrinkCodec.decompress(transmittedImage) else {
+            throw SelfTestFailure.assertion("Section cannot be decompressed")
+        }
+        try require(decoded.count == section.uncompressedLength, "Section decompression length differs")
+        reconstructedLetter.append(decoded)
+    }
+    try require(reconstructedLetter == letterBitmap, "Multi-section letter cannot be reconstructed")
     let completedPrintReport = Data([0x08, 0x06, 0x1A, 0x05, 0x08, 0x0A, 0x12, 0x01, 0x30])
     try require(
         MunbynRW403BProtocol.parseResponse(completedPrintReport) == .printStatus("0"),
@@ -177,6 +211,8 @@ do {
     """
     let etsyOrders = try EtsyOrderCSVParser.parse(text: csv)
     try require(etsyOrders.count == 2, "Etsy CSV order count is wrong")
+    let crlfOrders = try EtsyOrderCSVParser.parse(text: csv.replacingOccurrences(of: "\n", with: "\r\n"))
+    try require(crlfOrders == etsyOrders, "Etsy exports with CRLF line endings must retain the same orders")
     try require(etsyOrders[0].recipientName == "Mia Muster", "Etsy recipient name was not parsed")
     try require(etsyOrders[1].street1 == "12 Market Street, South", "Quoted Etsy address was not parsed")
     try require(etsyOrders[0].recipientLines.contains("66740 Saarlouis"), "Etsy locality formatting failed")
@@ -212,7 +248,11 @@ do {
     let legacyJob = try decoder.decode(PrintJob.self, from: Data(legacyJobJSON.utf8))
     try require(legacyJob.resolvedLabelFormat == .shipping100x150, "Legacy print job format fallback failed")
 
-    print("LabelCoreSelfTest: 51 checks passed")
+    try runCutGuideTests()
+    try runFirmwareTests()
+    try runGuidedShippingTests()
+    try runPostageTests()
+    print("LabelCoreSelfTest: all checks passed")
 } catch {
     fputs("LabelCoreSelfTest failed: \(error)\n", stderr)
     exit(1)

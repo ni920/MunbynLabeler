@@ -15,7 +15,7 @@ struct SettingsView: View {
                     Label("Bluetooth", systemImage: "wave.3.right.circle")
                 }
         }
-        .frame(width: 620, height: 520)
+        .frame(width: 620, height: 600)
         .scenePadding()
     }
 }
@@ -25,16 +25,10 @@ private struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("RW403B") {
-                Stepper("Geschwindigkeit: \(appStore.speed)", value: $appStore.speed, in: 1...8)
-                Stepper("Druckdichte: \(appStore.density)", value: $appStore.density, in: 1...15)
-            }
-
-            Section("Etikettenmaterial") {
-                LabelFormatControls(appStore: appStore, showHeading: false)
-                Text("Paketlabel werden immer mit 100 × 150 mm gedruckt.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section("Bedienung") {
+                Toggle("Geführten Modus verwenden", isOn: $appStore.guidedMode)
+                Text("Der geführte Modus zeigt die Vorbereitung Schritt für Schritt. Im Direktmodus stehen alle Versandfelder zusammen.")
+                    .font(.callout)
             }
 
             Section("Absender für Briefetiketten") {
@@ -47,6 +41,17 @@ private struct GeneralSettingsView: View {
                 }
                 TextField("Land", text: $appStore.senderCountry)
             }
+            Section("Etikettenmaterial") {
+                LabelFormatControls(appStore: appStore, showHeading: false)
+                Text("Paketlabel verwenden 100 × 150 mm.").font(.callout)
+            }
+            Section {
+                DisclosureGroup("Erweiterte Druckeinstellungen") {
+                    Stepper("Geschwindigkeit: \(appStore.speed)", value: $appStore.speed, in: 1...8)
+                    Stepper("Druckdichte: \(appStore.density)", value: $appStore.density, in: 1...15)
+                }
+            }
+
         }
         .formStyle(.grouped)
     }

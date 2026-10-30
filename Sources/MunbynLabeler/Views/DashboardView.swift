@@ -9,18 +9,16 @@ struct DashboardView: View {
 
     private var selectedJob: PrintJob? {
         if let id = appStore.selectedJobID,
-           let match = jobStore.jobs.first(where: { $0.id == id }) {
+           let match = jobStore.jobs.first(where: { $0.id == id && $0.postageStampIDs == nil && $0.letterFlowID == nil }) {
             return match
         }
-        return jobStore.jobs.first(where: { $0.status == .ready || $0.status == .failed })
+        return jobStore.jobs.first(where: { $0.postageStampIDs == nil && $0.letterFlowID == nil && ($0.status == .ready || $0.status == .failed) })
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                header
-                connectionCard
-                ShippingFormView(appStore: appStore)
+                ShippingFormView(appStore: appStore, postage: appStore.postage, controller: appStore.letterFlowController)
                 if let selectedJob {
                     readyLabelCard(selectedJob)
                 }
@@ -31,94 +29,25 @@ struct DashboardView: View {
                         .padding(.horizontal, 4)
                 }
             }
-            .padding(28)
-            .frame(maxWidth: 900, alignment: .leading)
+            .padding(32)
+            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .navigationTitle("Drucken")
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Etiketten ohne Umweg")
-                .font(.system(size: 30, weight: .semibold, design: .rounded))
-            Text("Briefadresse eingeben oder ein fertiges DHL-Paketlabel auswählen und direkt drucken.")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var connectionCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: bluetooth.connectionState.isReady ? "printer.fill" : "wave.3.right")
-                    .font(.system(size: 24))
-                    .foregroundStyle(bluetooth.connectionState.isReady ? Color.green : Color.accentColor)
-                    .frame(width: 34)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(bluetooth.connectionState.title)
-                        .font(.headline)
-                    if let detail = bluetooth.connectionState.detail {
-                        Text(detail)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-
-                if bluetooth.connectionState.isReady {
-                    Button("Testetikett", action: appStore.printTestLabel)
-                        .buttonStyle(.borderedProminent)
-                    Button("Trennen", action: bluetooth.disconnect)
-                } else {
-                    Button("Geräte suchen", action: bluetooth.startScanning)
-                        .buttonStyle(.borderedProminent)
-                }
-            }
-
-            if !bluetooth.discoveredDevices.isEmpty && !bluetooth.connectionState.isReady {
-                Divider()
-                VStack(spacing: 8) {
-                    ForEach(bluetooth.discoveredDevices.prefix(8)) { device in
-                        HStack {
-                            Image(systemName: "printer")
-                                .foregroundStyle(Color.accentColor)
-                            VStack(alignment: .leading) {
-                                Text(device.name)
-                                Text("Signal \(device.rssi) dBm")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Verbinden") {
-                                bluetooth.connect(to: device.id)
-                            }
-                        }
-                        .padding(.vertical, 3)
-                    }
-                }
-            }
-
-            if bluetooth.transferProgress > 0 && bluetooth.transferProgress < 1 {
-                ProgressView(value: bluetooth.transferProgress)
-            }
-        }
-        .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .navigationTitle("Versenden")
     }
 
     private func readyLabelCard(_ job: PrintJob) -> some View {
         HStack(spacing: 18) {
             preview(for: job.sourceURL)
-                .frame(width: 130, height: 160)
+                .frame(width: 70, height: 85)
 
             VStack(alignment: .leading, spacing: 9) {
-                Label("Druckbereit", systemImage: "checkmark.circle.fill")
+                Label(job.status.label, systemImage: job.status == .failed ? "exclamationmark.circle" : "doc")
                     .font(.headline)
-                    .foregroundStyle(.green)
                 Text(job.title)
                     .font(.headline)
                     .lineLimit(2)
-                Text("\(job.resolvedLabelFormat.sizeDescription) · 203 dpi · \(job.status.label)")
+                Text("\(job.resolvedLabelFormat.sizeDescription)")
                     .foregroundStyle(.secondary)
                 if let error = job.errorMessage {
                     Text(error)
@@ -128,7 +57,7 @@ struct DashboardView: View {
                 Button("Druckvorschau") {
                     appStore.presentPrintPreview(job)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .disabled(job.status == .printing)
             }
             Spacer()

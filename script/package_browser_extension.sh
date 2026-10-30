@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_DIR="$ROOT_DIR/BrowserExtension"
 DIST_DIR="$ROOT_DIR/dist"
-ARCHIVE="$DIST_DIR/MunbynLabeler-Browser-Extension.zip"
+ARCHIVE="$DIST_DIR/LabelHelper-Browser-Extension.zip"
 
 node --test "$SOURCE_DIR/tests/etsy-order.test.js"
 mkdir -p "$DIST_DIR"

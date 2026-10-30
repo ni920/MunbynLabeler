@@ -28,7 +28,7 @@ public enum BrowserOrderLinkError: LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidURL: "Dieser Link gehört nicht zu Munbyn Labeler."
+        case .invalidURL: "Dieser Link gehört nicht zu Label Helper."
         case .payloadMissing: "Der Etsy-Link enthält keine Bestelldaten."
         case .payloadTooLarge: "Die Etsy-Bestelldaten sind zu groß."
         case .unsupportedVersion(let version): "Die Etsy-Erweiterung verwendet die nicht unterstützte Version \(version)."

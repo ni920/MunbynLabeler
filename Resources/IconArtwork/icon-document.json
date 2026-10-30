@@ -1,0 +1,148 @@
+{
+  "color-space-for-untagged-svg-colors" : "srgb",
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.211765,0.486275,0.901961,1.000000",
+          "srgb:0.094118,0.329412,0.698039,1.000000"
+        ]
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "linear-gradient" : [
+          "srgb:0.098039,0.219608,0.372549,1.000000",
+          "srgb:0.043137,0.113725,0.211765,1.000000"
+        ]
+      }
+    },
+    {
+      "appearance" : "tinted",
+      "value" : "automatic"
+    }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "srgb:0.160784,0.278431,0.435294,1.000000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.125490,0.231373,0.376471,1.000000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.188235,0.231373,0.294118,1.000000"
+              }
+            }
+          ],
+          "glass" : false,
+          "image-name" : "address.svg",
+          "name" : "Address lines"
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Address",
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "srgb:0.741176,0.831373,0.960784,1.000000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.490196,0.623529,0.788235,1.000000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.686275,0.717647,0.768627,1.000000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "peel.svg",
+          "name" : "Peeled corner"
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Peel",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.12
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.14999999999999999
+      }
+    },
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "srgb:1.000000,1.000000,1.000000,1.000000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.835294,0.882353,0.949020,1.000000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.941176,0.945098,0.956863,1.000000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "label.svg",
+          "name" : "Shipping label"
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Label",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.17999999999999999
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.080000000000000002
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

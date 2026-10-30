@@ -1,8 +1,8 @@
-# Munbyn Labeler Etsy-Erweiterung
+# Label Helper Etsy-Erweiterung
 
-Die Erweiterung ergänzt Etsy-Bestellseiten um **An Munbyn Labeler senden**.
+Die Erweiterung ergänzt Etsy-Bestellseiten um **An Label Helper senden**.
 Sie liest die aktuell geöffnete Bestellung erst nach einem Klick und öffnet die
-lokal installierte Munbyn-Labeler-App. Es werden keine Bestelldaten an einen
+lokal installierte Label-Helper-App. Es werden keine Bestelldaten an einen
 Server übertragen.
 
 ## Chrome installieren
@@ -33,6 +33,6 @@ Apple-Developer-Mitgliedschaft erforderlich.
 ## Verwendung
 
 1. Etsy-Shop-Manager öffnen und eine Bestellung mit Versandadresse anzeigen.
-2. **An Munbyn Labeler senden** anklicken.
-3. Den Browserdialog zum Öffnen von Munbyn Labeler bestätigen.
+2. **An Label Helper senden** anklicken.
+3. Den Browserdialog zum Öffnen von Label Helper bestätigen.
 4. In der App **Brief** oder **Paket** wählen und die Daten prüfen.

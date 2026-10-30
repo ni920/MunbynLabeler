@@ -83,46 +83,55 @@ enum LabelRenderer {
         format: LabelFormat = .shipping100x150,
         threshold: UInt8 = 170
     ) throws -> LabelRaster {
-        let width = format.widthDots
-        let height = format.heightDots
-        var grayscale = [UInt8](repeating: 255, count: width * height)
-        guard let context = CGContext(
-            data: &grayscale,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width,
-            space: CGColorSpaceCreateDeviceGray(),
-            bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else {
-            throw LabelRendererError.cannotCreateBitmap
-        }
-
-        context.setFillColor(gray: 1, alpha: 1)
-        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-        context.interpolationQuality = .high
-
-        let canvas = CGRect(x: 0, y: 0, width: width, height: height)
         if url.pathExtension.lowercased() == "pdf" {
-            guard let document = CGPDFDocument(url as CFURL),
-                  let page = document.page(at: 1) else {
+            guard let document = CGPDFDocument(url as CFURL), let page = document.page(at: 1) else {
                 throw LabelRendererError.cannotReadDocument
             }
-            let source = page.getBoxRect(.mediaBox)
-            let placement = PDFLabelPlacement.resolve(pageBounds: source, labelFormat: format)
+            return try render(page: page, format: format, threshold: threshold)
+        }
+        guard let image = NSImage(contentsOf: url),
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw LabelRendererError.unsupportedFile
+        }
+        return try render(format: format, threshold: threshold) { context, canvas in
+            context.draw(cgImage, in: aspectFit(CGSize(width: cgImage.width, height: cgImage.height), in: canvas))
+        }
+    }
+
+    static func render(pdfData: Data, format: LabelFormat) throws -> LabelRaster {
+        guard let provider = CGDataProvider(data: pdfData as CFData),
+              let document = CGPDFDocument(provider), let page = document.page(at: 1) else {
+            throw LabelRendererError.cannotReadDocument
+        }
+        return try render(page: page, format: format, threshold: 170)
+    }
+
+    private static func render(page: CGPDFPage, format: LabelFormat, threshold: UInt8) throws -> LabelRaster {
+        try render(format: format, threshold: threshold) { context, canvas in
+            let placement = PDFLabelPlacement.resolve(pageBounds: page.getBoxRect(.mediaBox), labelFormat: format)
             context.saveGState()
             context.concatenate(placement.drawingTransform(in: canvas))
             context.clip(to: placement.sourceRect)
             context.drawPDFPage(page)
             context.restoreGState()
-        } else {
-            guard let image = NSImage(contentsOf: url),
-                  let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-                throw LabelRendererError.unsupportedFile
-            }
-            let target = aspectFit(CGSize(width: cgImage.width, height: cgImage.height), in: canvas)
-            context.draw(cgImage, in: target)
         }
+    }
+
+    private static func render(
+        format: LabelFormat, threshold: UInt8, draw: (CGContext, CGRect) -> Void
+    ) throws -> LabelRaster {
+        let width = format.widthDots
+        let height = format.heightDots
+        var grayscale = [UInt8](repeating: 255, count: width * height)
+        guard let context = CGContext(
+            data: &grayscale, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { throw LabelRendererError.cannotCreateBitmap }
+        let canvas = CGRect(x: 0, y: 0, width: width, height: height)
+        context.setFillColor(gray: 1, alpha: 1)
+        context.fill(canvas)
+        context.interpolationQuality = .high
+        draw(context, canvas)
 
         let bytesPerRow = (width + 7) / 8
         var packed = Data(count: bytesPerRow * height)

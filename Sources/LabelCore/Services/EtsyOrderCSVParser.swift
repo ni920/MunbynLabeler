@@ -134,7 +134,7 @@ private enum CSVReader {
                 case ",":
                     row.append(field)
                     field = ""
-                case "\n":
+                case "\n", "\r", "\r\n":
                     row.append(field.trimmingCharacters(in: CharacterSet(charactersIn: "\r")))
                     if row.contains(where: { !$0.isEmpty }) { rows.append(row) }
                     row = []

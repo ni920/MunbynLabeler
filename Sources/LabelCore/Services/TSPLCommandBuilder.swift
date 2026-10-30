@@ -29,7 +29,7 @@ public enum TSPLCommandBuilder {
 
     public static func testLabel(
         title: String = "RW403B VERBUNDEN",
-        subtitle: String = "Munbyn Labeler Bluetooth-Test",
+        subtitle: String = "Label Helper Bluetooth-Test",
         date: Date = Date()
     ) -> Data {
         let timestamp = ISO8601DateFormatter().string(from: date)

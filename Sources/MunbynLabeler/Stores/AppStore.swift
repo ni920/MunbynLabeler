@@ -18,7 +18,34 @@ final class AppStore: ObservableObject {
         }
     }
 
+    @Published var guidedMode: Bool {
+        didSet { defaults.set(guidedMode, forKey: "guidedMode") }
+    }
+    @Published var showPrinterConnection = false
+    @Published var homeRequestSequence = 0
+    @Published private(set) var shippingImportSequence = 0
+    @Published private(set) var labelImportSequence = 0
+    @Published private(set) var lastImportedLabelJobID: UUID?
+    @Published private(set) var postageImportSucceeded = false
     @Published var showImporter = false
+    @Published var showPostageImporter = false
+    @Published var postagePreview: PostagePrintBatch?
+    @Published var letterFlowPreview: LetterShipmentFlow?
+    @Published var selectedLetterPostageID: String {
+        didSet { defaults.set(selectedLetterPostageID, forKey: "selectedLetterPostageID") }
+    }
+    @Published var letterWithPostage: Bool {
+        didSet { defaults.set(letterWithPostage, forKey: "letterWithPostage") }
+    }
+    @Published var selectedPostageIDs: Set<String> = []
+    @Published private(set) var postageImportSequence = 0
+    @Published private(set) var printInProgress = false
+    @Published private(set) var printingPostageBatch = false
+    @Published private(set) var postageBatchProgress = ""
+    private var postageBatchRemaining: [PrintJob] = []
+    private var postageBatchTotal = 0
+    private var postageBatchCompleted = 0
+    private var stopPostageBatch = false
     @Published var showEtsyImporter = false
     @Published var showEtsyImportReview = false
     @Published var showEtsyImportError = false
@@ -72,10 +99,23 @@ final class AppStore: ObservableObject {
     @Published private(set) var pendingEtsyOrders: [EtsyOrder] = []
     @Published private(set) var incomingBrowserOrder: BrowserOrderPayload?
     @Published private(set) var activeBrowserOrder: BrowserOrderPayload?
+    @Published private(set) var activeCSVOrderID: String?
     @Published private(set) var browserImportSequence = 0
 
     let bluetooth = BluetoothPrinterService()
     let jobs = PrintJobStore()
+    let postage = PostageStampStore()
+    let letterFlows = LetterFlowStore()
+    lazy var letterFlowController = LetterFlowController(
+        store: letterFlows, postage: postage,
+        isReady: { [weak self] in
+            guard let self else { return false }
+            return self.bluetooth.connectionState.isReady && self.canPrintSelectedMaterialOverBluetooth && !self.printInProgress && !self.printingPostageBatch
+        },
+        printJob: { [weak self] job, flowID, completion in
+            self?.printJob(job, letterFlowID: flowID, completion: completion)
+        }
+    )
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -94,6 +134,9 @@ final class AppStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        guidedMode = defaults.object(forKey: "guidedMode") as? Bool ?? true
+        letterWithPostage = defaults.bool(forKey: "letterWithPostage")
+        selectedLetterPostageID = defaults.string(forKey: "selectedLetterPostageID") ?? ""
         let initialShipmentKind = ShipmentKind(
             rawValue: defaults.string(forKey: Keys.selectedShipmentKind) ?? ""
         ) ?? .letter
@@ -119,6 +162,33 @@ final class AppStore: ObservableObject {
 
     var selectedPaperType: MunbynPaperType {
         labelStockMode == .continuous100 ? .continuous : .gap
+    }
+
+    var canPrintSelectedMaterialOverBluetooth: Bool {
+        labelStockMode != .continuous100 || bluetooth.supportsContinuousStock
+    }
+
+    var postageFormats: [LabelFormat] {
+        if labelStockMode == .continuous100 {
+            return [.shipping100x150, .continuousLetter100x55, .product100x50]
+        }
+        return [.shipping100x150, .product100x50, .address89x36, .address70x36, .square50]
+    }
+
+    func postageFormat(for id: String) -> LabelFormat {
+        postageFormats.first { $0.id == id } ?? .shipping100x150
+    }
+
+    func printedLabelFormat(_ contentFormat: LabelFormat) -> LabelFormat {
+        labelStockMode == .continuous100 ? ContinuousLabelCutGuide.printFormat(for: contentFormat) : contentFormat
+    }
+
+    func applyingMaterialCutGuide(to raster: LabelRaster) -> LabelRaster {
+        labelStockMode == .continuous100 ? ContinuousLabelCutGuide.applying(to: raster) : raster
+    }
+
+    func renderLabel(_ job: PrintJob) throws -> LabelRaster {
+        applyingMaterialCutGuide(to: try LabelRenderer.render(url: job.sourceURL, format: job.resolvedLabelFormat))
     }
 
     var selectedLetterLabelFormat: LabelFormat {
@@ -152,11 +222,16 @@ final class AppStore: ObservableObject {
         )
     }
 
-    func importFiles(_ urls: [URL]) {
+    func importFiles(_ urls: [URL], presentPreview: Bool = true) {
         var lastImportedJob: PrintJob?
         for url in urls {
             if url.pathExtension.lowercased() == "csv" {
                 loadEtsyCSV(url)
+                continue
+            }
+            if url.pathExtension.lowercased() == "pdf",
+               (try? PostagePDFService.readStamps(from: url))?.isEmpty == false {
+                importPostageBundle(url)
                 continue
             }
             do {
@@ -172,6 +247,10 @@ final class AppStore: ObservableObject {
         }
 
         if let lastImportedJob {
+            lastImportedLabelJobID = lastImportedJob.id
+            labelImportSequence &+= 1
+        }
+        if presentPreview, let lastImportedJob {
             // The file importer must finish dismissing before another sheet can open.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.presentPrintPreview(lastImportedJob)
@@ -198,7 +277,9 @@ final class AppStore: ObservableObject {
         guard let order = incomingBrowserOrder else { return }
         applyRecipient(order.recipient)
         activeBrowserOrder = order
+        activeCSVOrderID = nil
         selectedShipmentKind = shipmentKind
+        shippingImportSequence &+= 1
         incomingBrowserOrder = nil
         showBrowserOrderReview = false
         browserImportSequence &+= 1
@@ -213,11 +294,28 @@ final class AppStore: ObservableObject {
     }
 
     func printTestLabel() {
+        guard !printInProgress, !printingPostageBatch, letterFlowController.activeFlowID == nil else { return }
+        // Keep a continuous-stock test short even if the current task is a parcel.
+        let testFormat = labelStockMode == .continuous100 ? LabelFormat.continuousLetter100x55 : selectedLabelFormat
+        if labelStockMode == .continuous100 && !canPrintSelectedMaterialOverBluetooth {
+            do {
+                try SystemPrinterService.print(
+                    applyingMaterialCutGuide(to: LabelRenderer.testPattern(format: testFormat)),
+                    format: printedLabelFormat(testFormat)
+                )
+                lastMessage = "Das Testetikett wurde an den macOS-Systemdruck übergeben."
+            } catch {
+                lastMessage = "Systemdruck fehlgeschlagen: \(error.localizedDescription)"
+            }
+            return
+        }
         lastMessage = "Testetikett wird für den RW403B vorbereitet …"
+        printInProgress = true
         bluetooth.printRaster(
-            LabelRenderer.testPattern(format: selectedLabelFormat),
+            applyingMaterialCutGuide(to: LabelRenderer.testPattern(format: testFormat)),
             paperType: selectedPaperType
         ) { [weak self] result in
+            self?.printInProgress = false
             switch result {
             case .success:
                 self?.lastMessage = "Testetikett wurde vom RW403B gedruckt."
@@ -227,9 +325,48 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func printJob(_ job: PrintJob) {
+    func printJob(_ job: PrintJob, letterFlowID: UUID? = nil, completion: ((Result<Void, Error>) -> Void)? = nil) {
+        guard !printInProgress else {
+            completion?(.failure(BluetoothPrinterError.transferInProgress)); return
+        }
+        guard (letterFlowController.activeFlowID == nil || letterFlowController.activeFlowID == letterFlowID),
+              job.letterFlowID == letterFlowID else {
+            lastMessage = "Dieser Auftrag gehört zu einem Briefablauf. Bitte im Bereich Briefversand öffnen."
+            completion?(.failure(BluetoothPrinterError.transferInProgress)); return
+        }
+        if let ids = job.postageStampIDs {
+            guard postage.canPrint(ids, reservationID: letterFlowID) else {
+                let message = "Diese Marken sind bereits gedruckt oder ihr Ausdruck muss zuerst geprüft werden."
+                lastMessage = message
+                completion?(.failure(NSError(domain: "Briefmarken", code: 3, userInfo: [NSLocalizedDescriptionKey: message])))
+                return
+            }
+            guard canPrintSelectedMaterialOverBluetooth else {
+                let message = "Zum Drucken von Briefmarken auf Endlosrolle den RW403B mit Firmware ab 1.1.49 über Bluetooth verbinden."
+                lastMessage = message
+                completion?(.failure(NSError(domain: "Briefmarken", code: 4, userInfo: [NSLocalizedDescriptionKey: message])))
+                return
+            }
+        }
+        if labelStockMode == .continuous100 && !canPrintSelectedMaterialOverBluetooth {
+            jobs.update(job.id, status: .printing)
+            lastMessage = "macOS-Systemdruck wird vorbereitet …"
+            do {
+                let raster = try renderLabel(job)
+                try SystemPrinterService.print(raster, format: printedLabelFormat(job.resolvedLabelFormat))
+                jobs.update(job.id, status: .printed)
+                lastMessage = "Das Etikett wurde an den macOS-Systemdruck übergeben."
+                completion?(.success(()))
+            } catch {
+                jobs.update(job.id, status: .failed, errorMessage: error.localizedDescription)
+                lastMessage = "Systemdruck fehlgeschlagen: \(error.localizedDescription)"
+                completion?(.failure(error))
+            }
+            return
+        }
         guard bluetooth.connectionState.isReady else {
             lastMessage = "Bitte zuerst den RW403B verbinden."
+            completion?(.failure(BluetoothPrinterError.notConnected))
             return
         }
 
@@ -237,21 +374,102 @@ final class AppStore: ObservableObject {
         lastMessage = "\(job.sourceURL.lastPathComponent) wird vorbereitet …"
 
         do {
-            let raster = try LabelRenderer.render(url: job.sourceURL, format: job.resolvedLabelFormat)
+            let raster = try renderLabel(job)
+            if let ids = job.postageStampIDs, !postage.update(ids, status: .printing) {
+                throw NSError(domain: "Briefmarken", code: 2, userInfo: [NSLocalizedDescriptionKey: postage.storageError ?? "Druckstatus konnte nicht gespeichert werden."])
+            }
+            printInProgress = true
             bluetooth.printRaster(raster, paperType: selectedPaperType) { [weak self] result in
                 guard let self else { return }
+                self.printInProgress = false
                 switch result {
                 case .success:
                     self.jobs.update(job.id, status: .printed)
                     self.lastMessage = "Etikett wurde vom RW403B gedruckt."
+                    if let ids = job.postageStampIDs { self.postage.update(ids, status: .printed) }
                 case .failure(let error):
                     self.jobs.update(job.id, status: .failed, errorMessage: error.localizedDescription)
                     self.lastMessage = "Druck fehlgeschlagen: \(error.localizedDescription)"
+                    if let ids = job.postageStampIDs { self.postage.update(ids, status: .checkPrint) }
                 }
+                completion?(result)
             }
         } catch {
             jobs.update(job.id, status: .failed, errorMessage: error.localizedDescription)
             lastMessage = "Aufbereitung fehlgeschlagen: \(error.localizedDescription)"
+            completion?(.failure(error))
+        }
+    }
+
+    func importPostageBundle(_ url: URL) {
+        do {
+            let ids = try postage.importBundle(url)
+            selectedPostageIDs = Set(ids.filter { id in postage.canPrint([id]) })
+            postageImportSucceeded = true
+            postageImportSequence &+= 1
+            lastMessage = "\(ids.count) Briefmarken erkannt; \(selectedPostageIDs.count) davon verfügbar."
+        } catch {
+            postageImportSucceeded = false
+            lastMessage = "Briefmarken-Import fehlgeschlagen: \(error.localizedDescription)"
+            postageImportSequence &+= 1
+        }
+    }
+
+    func preparePostageSheets(format: LabelFormat, cutGuides: Bool) {
+        guard !printInProgress, !printingPostageBatch, letterFlowController.activeFlowID == nil else { return }
+        let stamps = postage.entries.filter { selectedPostageIDs.contains($0.id) && $0.status == .available }.map(\.stamp)
+        guard !stamps.isEmpty else { lastMessage = "Bitte verfügbare Briefmarken auswählen."; return }
+        do {
+            let sheets = try PostagePDFService.writeSheets(stamps: stamps, format: format, cutGuides: cutGuides, directory: postage.directory)
+            let queued = try sheets.enumerated().map { index, sheet in
+                try jobs.enqueue(url: sheet.0, labelFormat: format,
+                                 displayName: "Briefmarken · \(sheet.1.count) Marken · Etikett \(index + 1)/\(sheets.count)",
+                                 postageStampIDs: sheet.1)
+            }
+            postagePreview = PostagePrintBatch(jobs: queued)
+        } catch { lastMessage = error.localizedDescription }
+    }
+
+    func printPostageSheets(_ batch: PostagePrintBatch) {
+        guard !printInProgress, !printingPostageBatch, bluetooth.connectionState.isReady,
+              letterFlowController.activeFlowID == nil,
+              canPrintSelectedMaterialOverBluetooth, postage.canPrint(batch.jobs.flatMap { $0.postageStampIDs ?? [] }) else {
+            lastMessage = "Drucker verbinden und die Markenauswahl prüfen. Für Endlosrollen ist Firmware ab 1.1.49 erforderlich."
+            return
+        }
+        postagePreview = nil
+        printingPostageBatch = true
+        postageBatchRemaining = batch.jobs
+        postageBatchTotal = batch.jobs.count
+        postageBatchCompleted = 0
+        stopPostageBatch = false
+        printNextPostageSheet()
+    }
+
+    func stopAfterCurrentPostageSheet() { stopPostageBatch = true }
+
+    private func printNextPostageSheet() {
+        guard !stopPostageBatch, !postageBatchRemaining.isEmpty else {
+            printingPostageBatch = false
+            postageBatchProgress = "\(postageBatchCompleted) von \(postageBatchTotal) Etiketten gedruckt."
+            lastMessage = postageBatchProgress
+            postageBatchRemaining = []
+            selectedPostageIDs = Set(selectedPostageIDs.filter { postage.canPrint([$0]) })
+            return
+        }
+        let job = postageBatchRemaining.removeFirst()
+        postageBatchProgress = "Etikett \(postageBatchCompleted + 1) von \(postageBatchTotal) wird gedruckt …"
+        printJob(job) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success:
+                self.postageBatchCompleted += 1
+                self.printNextPostageSheet()
+            case .failure:
+                self.printingPostageBatch = false
+                self.postageBatchRemaining = []
+                self.postageBatchProgress = "Nach \(self.postageBatchCompleted) Etiketten angehalten. Bitte den letzten Ausdruck prüfen."
+            }
         }
     }
 
@@ -289,6 +507,8 @@ final class AppStore: ObservableObject {
     func applyEtsyOrder(_ order: EtsyOrder) {
         applyRecipient(order.recipientAddress)
         activeBrowserOrder = nil
+        activeCSVOrderID = order.id
+        shippingImportSequence &+= 1
         selectedShipmentKind = .letter
         showEtsyImportReview = false
         pendingEtsyOrders = []
@@ -296,12 +516,18 @@ final class AppStore: ObservableObject {
     }
 
     func createManualAddressLabel() {
+        guard !printInProgress, !printingPostageBatch, letterFlowController.activeFlowID == nil else { return }
         guard recipientAddress.isComplete else {
             lastMessage = "Bitte die vollständige Empfängeradresse eingeben."
             return
         }
         guard senderAddress.isComplete else {
             lastMessage = "Bitte den vollständigen Absender eingeben."
+            return
+        }
+
+        if letterWithPostage {
+            createLetterFlow()
             return
         }
 
@@ -325,6 +551,11 @@ final class AppStore: ObservableObject {
         }
     }
 
+    func requestLabelImport() {
+        if guidedMode { selectedShipmentKind = .parcel }
+        showImporter = true
+    }
+
     func chooseDHLLabelImport() {
         showEtsyImportReview = false
         selectedShipmentKind = .parcel
@@ -333,6 +564,11 @@ final class AppStore: ObservableObject {
     }
 
     func presentPrintPreview(_ job: PrintJob) {
+        if let id = job.letterFlowID {
+            guard let flow = letterFlows.flow(id) else { lastMessage = "Der zugehörige Briefablauf wurde nicht gefunden."; return }
+            letterFlowPreview = flow
+            return
+        }
         guard FileManager.default.fileExists(atPath: job.sourceURL.path) else {
             lastMessage = "Die Quelldatei für diese Vorschau wurde nicht gefunden."
             return
@@ -357,6 +593,33 @@ final class AppStore: ObservableObject {
         recipientPostalCode = recipient.postalCode
         recipientCity = recipient.city
         recipientCountry = recipient.country.isEmpty ? "Deutschland" : recipient.country
+    }
+
+    private func createLetterFlow() {
+        guard let entry = postage.entries.first(where: { $0.id == selectedLetterPostageID && $0.status == .available }) else {
+            lastMessage = "Bitte eine verfügbare Briefmarke mit passendem Portowert wählen."
+            return
+        }
+        let format = selectedLetterLabelFormat
+        guard PostageSheetLayout(stampSizes: [entry.stamp.sourceRect.size], format: format).capacity > 0 else {
+            lastMessage = "Die Briefmarke passt nicht in Originalgröße. Bitte ein größeres Etikettenformat wählen."
+            return
+        }
+        do {
+            let id = UUID()
+            let addressURL = try EtsyAddressLabelWriter.write(recipient: recipientAddress, sender: senderAddress, format: format)
+            let sheet = try PostagePDFService.writeSheets(stamps: [entry.stamp], format: format, cutGuides: false, directory: postage.directory)
+            guard let stampPDF = sheet.first?.0 else { throw PostagePDFError.cannotWrite }
+            let addressJob = try jobs.enqueue(url: addressURL, labelFormat: format, displayName: "Briefadresse · \(recipientAddress.name)",
+                                              sourceFingerprint: "letter-address:\(id)", letterFlowID: id)
+            let stampJob = try jobs.enqueue(url: stampPDF, labelFormat: format, displayName: "Briefmarke · \(recipientAddress.name)",
+                                            sourceFingerprint: "letter-stamp:\(id)", postageStampIDs: [entry.id], letterFlowID: id)
+            let flow = LetterShipmentFlow(id: id, recipientName: recipientAddress.name, orderID: activeBrowserOrder?.orderID ?? activeCSVOrderID,
+                                          stamp: entry.stamp, addressJob: addressJob, stampJob: stampJob)
+            try letterFlows.add(flow)
+            letterFlowPreview = flow
+            lastMessage = "Briefversand für \(recipientAddress.name) ist vorbereitet."
+        } catch { lastMessage = "Briefversand konnte nicht vorbereitet werden: \(error.localizedDescription)" }
     }
 
 }

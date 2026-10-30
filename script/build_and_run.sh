@@ -2,7 +2,10 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="MunbynLabeler"
+APP_NAME="Label Helper"
+# Retain the executable and bundle identity for existing preferences, print
+# history, Bluetooth authorization and browser links when changing the name.
+EXECUTABLE_NAME="MunbynLabeler"
 BUNDLE_ID="de.nicosaia.MunbynLabeler"
 MIN_SYSTEM_VERSION="14.0"
 CONFIGURATION="release"
@@ -15,40 +18,54 @@ APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
-APP_BINARY="$APP_MACOS/$APP_NAME"
+APP_BINARY="$APP_MACOS/$EXECUTABLE_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_SOURCE="$ROOT_DIR/Resources/AppIcon-1024.png"
+ICON_COMPOSER_SOURCE="$ROOT_DIR/Resources/AppIcon.icon"
 UNIVERSAL_BUILD_DIR="$ROOT_DIR/.build-universal"
 
 SWIFT_BUILD_ARGS=(
   --disable-sandbox
   -c "$CONFIGURATION"
   -debug-info-format none
-  --product "$APP_NAME"
+  --product "$EXECUTABLE_NAME"
 )
 
-# The currently installed standalone Command Line Tools expose a newer compiler
-# patch than their default macOS 27 SDK and do not ship SwiftUI's macro plugin.
-# Use the compatible macOS 15.2 SDK only for that CLT-only configuration.
-if [[ ! -d "/Applications/Xcode.app" && -d "/Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk" ]]; then
-  export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk"
-  export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.cache/clang-15"
-  export SWIFTPM_MODULECACHE_OVERRIDE="$CLANG_MODULE_CACHE_PATH"
-  mkdir -p "$CLANG_MODULE_CACHE_PATH"
-  SWIFT_BUILD_ARGS+=(
-    -Xswiftc -Xfrontend
-    -Xswiftc -interface-compiler-version
-    -Xswiftc -Xfrontend
-    -Xswiftc 6.0
-  )
+# Pass the SDK to SwiftPM and the linker explicitly. Cross-compiled builds
+# otherwise advertised the deployment target (14.0) as the linked SDK and opted
+# out of the modern appearance. Keep deployment target and build SDK separate.
+SELECTED_SDK_PATH="$(/usr/bin/xcrun --sdk macosx --show-sdk-path)"
+SELECTED_SDK_PATH="$(cd "$SELECTED_SDK_PATH" && pwd -P)"
+# The standalone macOS 27 CLT lacks SwiftUIMacros.StateMacro. The installed
+# 26.5 SDK retains State's property wrapper and supports native Liquid Glass.
+# Full Xcode installations keep their selected SDK and bundled macro plugins.
+if [[ "$SELECTED_SDK_PATH" == /Library/Developer/CommandLineTools/SDKs/MacOSX27* &&
+      -d "/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk" ]]; then
+  SELECTED_SDK_PATH="/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk"
 fi
+export SDKROOT="$SELECTED_SDK_PATH"
+export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.cache/clang"
+export SWIFTPM_MODULECACHE_OVERRIDE="$CLANG_MODULE_CACHE_PATH"
+mkdir -p "$CLANG_MODULE_CACHE_PATH"
+SELECTED_SDK_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :Version' "$SELECTED_SDK_PATH/SDKSettings.plist")"
+SWIFT_BUILD_ARGS+=(
+  --sdk "$SELECTED_SDK_PATH"
+  -Xlinker -platform_version
+  -Xlinker macos
+  -Xlinker "$MIN_SYSTEM_VERSION"
+  -Xlinker "$SELECTED_SDK_VERSION"
+)
+# A stable Apple Development / Developer ID identity preserves privacy grants
+# across builds. Without an installed identity, retain local ad-hoc signing.
+SIGNING_IDENTITY="${LABEL_HELPER_CODE_SIGN_IDENTITY:--}"
+echo "Build SDK: $SELECTED_SDK_PATH; minimum macOS: $MIN_SYSTEM_VERSION"
 
 if [[ ! -f "$ICON_SOURCE" ]]; then
   echo "Missing app icon source: $ICON_SOURCE" >&2
   exit 1
 fi
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+pkill -x "$EXECUTABLE_NAME" >/dev/null 2>&1 || true
 
 cd "$ROOT_DIR"
 
@@ -68,7 +85,7 @@ for ARCHITECTURE in "${TARGET_ARCHITECTURES[@]}"; do
     --scratch-path "$SCRATCH_PATH" \
     --triple "$TARGET_TRIPLE" \
     --show-bin-path)"
-  BUILD_BINARIES+=("$BIN_PATH/$APP_NAME")
+  BUILD_BINARIES+=("$BIN_PATH/$EXECUTABLE_NAME")
 done
 
 rm -rf "$APP_BUNDLE"
@@ -116,19 +133,39 @@ create_icon_size 512 icon_512x512.png
 create_icon_size 1024 icon_512x512@2x.png
 /usr/bin/swift "$ROOT_DIR/script/create_icns.swift" "$ICONSET_DIR" "$APP_RESOURCES/AppIcon.icns"
 
+# Xcode's asset compiler embeds the real layered icon for macOS 26+, while
+# CFBundleIconFile retains the ICNS fallback for older systems / CLT-only builds.
+if [[ -d "$ICON_COMPOSER_SOURCE" ]]; then
+  ASSET_COMPILER="$(/usr/bin/xcrun --find actool 2>/dev/null || true)"
+  if [[ -n "$ASSET_COMPILER" && "${SELECTED_SDK_VERSION%%.*}" -ge 26 ]]; then
+    "$ASSET_COMPILER" "$ICON_COMPOSER_SOURCE" \
+      --compile "$APP_RESOURCES" \
+      --platform macosx --target-device mac \
+      --minimum-deployment-target "$MIN_SYSTEM_VERSION" \
+      --app-icon AppIcon \
+      --output-partial-info-plist "$UNIVERSAL_BUILD_DIR/icon-info.plist" \
+      --output-format human-readable-text
+    test -f "$APP_RESOURCES/Assets.car"
+    echo "Layered Icon Composer asset compiled."
+  else
+    echo "Modern actool unavailable: using the compatible ICNS icon; layered source retained."
+  fi
+fi
+
+
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>$APP_NAME</string>
+  <string>$EXECUTABLE_NAME</string>
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>$APP_NAME</string>
   <key>CFBundleDisplayName</key>
-  <string>Munbyn Labeler</string>
+  <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIconName</key>
@@ -138,17 +175,17 @@ cat >"$INFO_PLIST" <<PLIST
   <key>LSMultipleInstancesProhibited</key>
   <true/>
   <key>CFBundleShortVersionString</key>
-  <string>0.6.3</string>
+  <string>0.7.0</string>
   <key>CFBundleVersion</key>
-  <string>18</string>
+  <string>20</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Munbyn Labeler verbindet sich mit deinem RW403B und überträgt Etiketten zum Drucken.</string>
+  <string>Label Helper verbindet sich mit deinem RW403B und überträgt Etiketten zum Drucken.</string>
   <key>NSBluetoothPeripheralUsageDescription</key>
-  <string>Munbyn Labeler benötigt Bluetooth für die Verbindung zum RW403B.</string>
+  <string>Label Helper benötigt Bluetooth für die Verbindung zum RW403B.</string>
   <key>SUFeedURL</key>
   <string>https://github.com/ni920/MunbynLabeler/releases/latest/download/appcast.xml</string>
   <key>SUPublicEDKey</key>
@@ -178,8 +215,22 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
-/usr/bin/codesign --force --deep --sign - "$APP_FRAMEWORKS/Sparkle.framework"
-/usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
+# Check the actual Mach-O metadata; successful compilation alone doesn't
+# establish which system appearance macOS will select for the final bundle.
+/usr/bin/vtool -show-build "$APP_BINARY" | /usr/bin/awk \
+  -v sdk="$SELECTED_SDK_VERSION" -v minimum="$MIN_SYSTEM_VERSION" \
+  -v architectures="${#TARGET_ARCHITECTURES[@]}" '
+  $1 == "sdk" { sdk_count++; if ($2 != sdk) invalid = 1 }
+  $1 == "minos" { minimum_count++; if ($2 != minimum) invalid = 1 }
+  END {
+    if (invalid || sdk_count != architectures || minimum_count != architectures) {
+      print "Unexpected SDK or deployment metadata in the Universal app" > "/dev/stderr"
+      exit 1
+    }
+  }'
+
+/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_FRAMEWORKS/Sparkle.framework"
+/usr/bin/codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_BUNDLE"
 
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
@@ -196,7 +247,7 @@ case "$MODE" in
     ;;
   --logs|logs)
     open_app
-    /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\""
+    /usr/bin/log stream --info --style compact --predicate "process == \"$EXECUTABLE_NAME\""
     ;;
   --telemetry|telemetry)
     open_app
@@ -208,7 +259,7 @@ case "$MODE" in
     /usr/bin/codesign --verify --deep --strict "$APP_BUNDLE"
     open_app
     sleep 1
-    pgrep -x "$APP_NAME" >/dev/null
+    pgrep -x "$EXECUTABLE_NAME" >/dev/null
     ;;
   *)
     echo "usage: $0 [build|run|--debug|--logs|--telemetry|--verify]" >&2

@@ -3,23 +3,21 @@ import SwiftUI
 
 struct ShippingFormView: View {
     @ObservedObject var appStore: AppStore
+    @ObservedObject var postage: PostageStampStore
+    @ObservedObject var controller: LetterFlowController
+
+    private var availableStamps: [PostageStamp] { postage.entries.filter { $0.status == .available }.map(\.stamp) }
+    private var busy: Bool { appStore.printInProgress || appStore.printingPostageBatch || controller.activeFlowID != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Versand vorbereiten")
-                    .font(.title2.weight(.semibold))
-                Text("Wähle zuerst, was du verschicken möchtest.")
-                    .foregroundStyle(.secondary)
-            }
-
             Picker("Versandart", selection: $appStore.selectedShipmentKind) {
                 ForEach(ShipmentKind.allCases) { kind in
                     Label(kind.title, systemImage: kind.icon).tag(kind)
                 }
             }
             .pickerStyle(.segmented)
-            .labelsHidden()
+            .frame(maxWidth: 260)
 
             Divider()
 
@@ -30,8 +28,7 @@ struct ShippingFormView: View {
                 parcelForm
             }
         }
-        .padding(22)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+
     }
 
     private var letterForm: some View {
@@ -41,59 +38,51 @@ struct ShippingFormView: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Label("Empfänger", systemImage: "person.crop.rectangle")
+                        Text("Empfänger")
                             .font(.headline)
                         Spacer()
                         Button("Aus Etsy-CSV übernehmen …") {
                             appStore.showEtsyImporter = true
                         }
                     }
-                    addressGrid(
-                        name: $appStore.recipientName,
-                        street1: $appStore.recipientStreet1,
-                        street2: $appStore.recipientStreet2,
-                        postalCode: $appStore.recipientPostalCode,
-                        city: $appStore.recipientCity,
-                        country: $appStore.recipientCountry
-                    )
+                    RecipientEditorView(appStore: appStore)
                 }
                 .padding(8)
             }
 
             GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label("Absender aus den Einstellungen", systemImage: "person.text.rectangle")
-                            .font(.headline)
-                        Spacer()
-                        SettingsLink {
-                            Text(appStore.senderAddress.isComplete ? "Ändern" : "Einrichten")
-                        }
-                    }
-                    if appStore.senderAddress.isComplete {
-                        Text(appStore.senderAddress.singleLine)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    } else {
-                        Label("Bitte den Absender einmal hinterlegen.", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .padding(8)
+                SenderSummaryView(appStore: appStore).padding(12)
             }
 
             GroupBox {
                 LabelFormatControls(appStore: appStore, showHeading: false)
                     .padding(8)
             } label: {
-                Label("Etikettenmaterial", systemImage: "rectangle.and.pencil.and.ellipsis")
+                Text("Etikettenformat")
             }
 
-            Text(appStore.labelStockMode == .continuous100
-                ? "Mit der Endlosrolle nutzt die App automatisch 55 mm Länge für Briefe und 150 mm für Pakete. Du musst die Rolle nicht wechseln."
-                : "89 × 36 mm ist eine kompakte Briefgröße. Die App merkt sich dein zuletzt gewähltes Briefformat; Paketlabel bleiben bei 100 × 150 mm.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            GroupBox {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle("Adresse + Briefmarke", isOn: $appStore.letterWithPostage)
+                    if appStore.letterWithPostage {
+                        Text("Zwei Etiketten in einem Ablauf: zuerst die Adresse, dann eine Briefmarke. Danach steht die Sendungsnummer zum Kopieren bereit.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Picker("Briefmarke", selection: $appStore.selectedLetterPostageID) {
+                            Text("Briefmarke auswählen …").tag("")
+                            ForEach(availableStamps) { stamp in
+                                Text("\(stamp.amount) € · …\(stamp.id.suffix(8))").tag(stamp.id)
+                            }
+                        }
+                        Text("Beide Etiketten: \(appStore.selectedLetterLabelFormat.sizeDescription). Bitte die für deinen Brief passende Frankierung auswählen.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if availableStamps.isEmpty {
+                            Button("Briefmarken-PDF importieren …") { appStore.showPostageImporter = true }
+                        }
+                        PostageMaterialRequirement(appStore: appStore, bluetooth: appStore.bluetooth)
+                    }
+                }.padding(8)
+            } label: { Text("Frankierung") }
+            .disabled(busy)
 
             HStack {
                 if !appStore.recipientAddress.isComplete || !appStore.senderAddress.isComplete {
@@ -102,13 +91,19 @@ struct ShippingFormView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Druckvorschau erstellen") {
+                Button(appStore.letterWithPostage ? "Briefablauf prüfen" : "Druckvorschau erstellen") {
                     appStore.createManualAddressLabel()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(!appStore.recipientAddress.isComplete || !appStore.senderAddress.isComplete)
+                .disabled(!appStore.recipientAddress.isComplete || !appStore.senderAddress.isComplete || busy ||
+                    (appStore.letterWithPostage && !availableStamps.contains { $0.id == appStore.selectedLetterPostageID }))
             }
+        }
+        .onChange(of: availableStamps.map(\.id)) { _, ids in
+            guard !appStore.selectedLetterPostageID.isEmpty, !ids.contains(appStore.selectedLetterPostageID) else { return }
+            let oldAmount = postage.entries.first { $0.id == appStore.selectedLetterPostageID }?.stamp.amount
+            appStore.selectedLetterPostageID = availableStamps.first { $0.amount == oldAmount }?.id ?? ""
         }
     }
 
@@ -163,44 +158,6 @@ struct ShippingFormView: View {
                 .padding(8)
             }
         }
-    }
-
-    private func addressGrid(
-        name: Binding<String>,
-        street1: Binding<String>,
-        street2: Binding<String>,
-        postalCode: Binding<String>,
-        city: Binding<String>,
-        country: Binding<String>
-    ) -> some View {
-        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 9) {
-            GridRow {
-                Text("Name")
-                    .frame(width: 86, alignment: .leading)
-                TextField("Vor- und Nachname oder Firma", text: name)
-            }
-            GridRow {
-                Text("Straße")
-                TextField("Straße und Hausnummer", text: street1)
-            }
-            GridRow {
-                Text("Zusatz")
-                TextField("Optional: Wohnung, Etage oder Firma", text: street2)
-            }
-            GridRow {
-                Text("Ort")
-                HStack {
-                    TextField("PLZ", text: postalCode)
-                        .frame(width: 100)
-                    TextField("Ort", text: city)
-                }
-            }
-            GridRow {
-                Text("Land")
-                TextField("Land", text: country)
-            }
-        }
-        .textFieldStyle(.roundedBorder)
     }
 
 }

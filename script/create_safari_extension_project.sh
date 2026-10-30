@@ -21,7 +21,7 @@ fi
 
 "$PACKAGER" "$SOURCE_DIR" \
   --project-location "$OUTPUT_DIR" \
-  --app-name "Munbyn Labeler für Etsy" \
+  --app-name "Label Helper für Etsy" \
   --bundle-identifier "de.nicosaia.MunbynLabeler.EtsyExtension" \
   --swift \
   --macos-only \

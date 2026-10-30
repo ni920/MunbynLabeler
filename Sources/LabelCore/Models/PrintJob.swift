@@ -23,6 +23,8 @@ public struct PrintJob: Identifiable, Codable, Equatable, Sendable {
     public let createdAt: Date
     public let labelFormat: LabelFormat?
     public let displayName: String?
+    public let postageStampIDs: [String]?
+    public let letterFlowID: UUID?
     public var status: Status
     public var errorMessage: String?
 
@@ -33,6 +35,8 @@ public struct PrintJob: Identifiable, Codable, Equatable, Sendable {
         createdAt: Date = Date(),
         labelFormat: LabelFormat? = nil,
         displayName: String? = nil,
+        postageStampIDs: [String]? = nil,
+        letterFlowID: UUID? = nil,
         status: Status = .ready,
         errorMessage: String? = nil
     ) {
@@ -42,6 +46,8 @@ public struct PrintJob: Identifiable, Codable, Equatable, Sendable {
         self.createdAt = createdAt
         self.labelFormat = labelFormat
         self.displayName = displayName
+        self.postageStampIDs = postageStampIDs
+        self.letterFlowID = letterFlowID
         self.status = status
         self.errorMessage = errorMessage
     }

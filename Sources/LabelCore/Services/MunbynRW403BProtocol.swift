@@ -74,6 +74,9 @@ public enum MunbynRW403BProtocol {
                     width: packetOffset == 0 ? printerWidthMM : 0,
                     totalSections: totalSections,
                     compression: 1,
+                    // The editor's processPage compresses each section before
+                    // DeviceRW402B/RW403B reads packets[index].length. This is
+                    // the transmitted byte count, unlike dataLength above.
                     sectionLength: compressed.count,
                     sectionIndex: sectionOffset + 1
                 )

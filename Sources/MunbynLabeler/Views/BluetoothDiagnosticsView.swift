@@ -61,6 +61,9 @@ struct BluetoothDiagnosticsView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(bluetooth.connectionState.title)
                     .font(.headline)
+                if let firmware = bluetooth.firmwareVersion {
+                    Text("Firmware \(firmware)").font(.callout)
+                }
                 if let detail = bluetooth.connectionState.detail {
                     Text(detail)
                         .font(.callout)

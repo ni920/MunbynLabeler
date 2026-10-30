@@ -23,6 +23,26 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Select modern Xcode when available
+        run: |
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import plistlib, re, subprocess
+          candidates = []
+          for app in Path("/Applications").glob("Xcode*.app"):
+              info = app / "Contents/Info.plist"
+              if not info.exists():
+                  continue
+              version = plistlib.loads(info.read_bytes()).get("CFBundleShortVersionString", "")
+              parts = tuple(int(value) for value in re.findall(r"\d+", version))
+              if parts and parts[0] >= 26:
+                  candidates.append((parts, app))
+          if candidates:
+              _, app = max(candidates)
+              subprocess.run(["sudo", "xcode-select", "--switch", str(app / "Contents/Developer")], check=True)
+          subprocess.run(["xcodebuild", "-version"], check=True)
+          PYCODE
+
       - name: Run protocol self-test
         run: |
           swift build -c release --product LabelCoreSelfTest
@@ -38,26 +58,26 @@ jobs:
 
       - name: Verify bundle
         run: |
-          APP_BINARY="dist/MunbynLabeler.app/Contents/MacOS/MunbynLabeler"
+          APP_BINARY="dist/Label Helper.app/Contents/MacOS/MunbynLabeler"
           lipo "$APP_BINARY" -verify_arch arm64
           lipo "$APP_BINARY" -verify_arch x86_64
-          test -d dist/MunbynLabeler.app/Contents/Frameworks/Sparkle.framework
+          test -d 'dist/Label Helper.app/Contents/Frameworks/Sparkle.framework'
           otool -L "$APP_BINARY" | grep -q Sparkle.framework
-          codesign --verify --deep --strict dist/MunbynLabeler.app
-          test -f dist/MunbynLabeler.app/Contents/Resources/AppIcon.icns
+          codesign --verify --deep --strict 'dist/Label Helper.app'
+          test -f 'dist/Label Helper.app/Contents/Resources/AppIcon.icns'
 
       - name: Package build artifact
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
-            dist/MunbynLabeler.app \
-            dist/MunbynLabeler-universal.zip
+            'dist/Label Helper.app' \
+            dist/LabelHelper-universal.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: MunbynLabeler-universal
+          name: LabelHelper-universal
           path: |
-            dist/MunbynLabeler-universal.zip
-            dist/MunbynLabeler-Browser-Extension.zip
+            dist/LabelHelper-universal.zip
+            dist/LabelHelper-Browser-Extension.zip
           if-no-files-found: error
           retention-days: 14

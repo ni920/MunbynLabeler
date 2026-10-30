@@ -21,11 +21,11 @@ struct QueueView: View {
                             Text(job.title)
                                 .font(.headline)
                             Text("\(job.resolvedLabelFormat.sizeDescription) · \(job.createdAt.formatted(.dateTime.day().month().hour().minute()))")
-                                .font(.caption)
+                                .font(.callout)
                                 .foregroundStyle(.secondary)
                             if let error = job.errorMessage {
                                 Text(error)
-                                    .font(.caption)
+                                    .font(.callout)
                                     .foregroundStyle(.red)
                             }
                         }
@@ -44,7 +44,7 @@ struct QueueView: View {
                 }
             }
         }
-        .navigationTitle("Warteschlange")
+        .navigationTitle("Druckaufträge")
         .toolbar {
             Button("Erledigte entfernen") {
                 jobStore.clearCompleted()

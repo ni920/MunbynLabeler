@@ -22,11 +22,11 @@
 
     button.disabled = true;
     button.querySelector("span").textContent = "Wird übertragen …";
-    showToast(shadow, `Bestellung #${order.orderID} wird in Munbyn Labeler geöffnet.`, "success");
+    showToast(shadow, `Bestellung #${order.orderID} wird in Label Helper geöffnet.`, "success");
     location.href = globalThis.MunbynEtsy.buildAppURL(order);
     setTimeout(() => {
       button.disabled = false;
-      button.querySelector("span").textContent = "An Munbyn Labeler senden";
+      button.querySelector("span").textContent = "An Label Helper senden";
     }, 1_500);
   }
 
@@ -34,7 +34,7 @@
     if (document.getElementById(ROOT_ID) || !document.body) return;
     const host = document.createElement("div");
     host.id = ROOT_ID;
-    host.setAttribute("aria-label", "Munbyn Labeler Etsy-Erweiterung");
+    host.setAttribute("aria-label", "Label Helper Etsy-Erweiterung");
     const shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
       <style>
@@ -87,7 +87,7 @@
           <svg class="munbyn-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path fill="currentColor" d="M6 3h12v5h1a3 3 0 0 1 3 3v6h-4v4H6v-4H2v-6a3 3 0 0 1 3-3h1V3Zm2 2v3h8V5H8Zm0 10v4h8v-4H8Zm10-4a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/>
           </svg>
-          <span>An Munbyn Labeler senden</span>
+          <span>An Label Helper senden</span>
         </button>
       </div>`;
     const button = shadow.querySelector(".munbyn-button");

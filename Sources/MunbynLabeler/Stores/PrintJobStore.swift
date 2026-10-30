@@ -20,7 +20,9 @@ final class PrintJobStore: ObservableObject {
         url: URL,
         labelFormat: LabelFormat,
         displayName: String? = nil,
-        sourceFingerprint: String? = nil
+        sourceFingerprint: String? = nil,
+        postageStampIDs: [String]? = nil,
+        letterFlowID: UUID? = nil
     ) throws -> PrintJob {
         let fileFingerprint: String
         if let sourceFingerprint {
@@ -39,7 +41,9 @@ final class PrintJobStore: ObservableObject {
             sourceURL: url,
             sourceFingerprint: fingerprint,
             labelFormat: labelFormat,
-            displayName: displayName
+            displayName: displayName,
+            postageStampIDs: postageStampIDs,
+            letterFlowID: letterFlowID
         )
         jobs.insert(job, at: 0)
         persist()

@@ -31,7 +31,7 @@ struct MunbynLabelerApp: App {
     )
 
     var body: some Scene {
-        Window("Munbyn Labeler", id: "main") {
+        Window("Label Helper", id: "main") {
             ContentView()
                 .environmentObject(appStore)
                 .frame(minWidth: 920, minHeight: 620)
@@ -50,14 +50,17 @@ struct MunbynLabelerApp: App {
                 .disabled(!updaterController.updater.canCheckForUpdates)
             }
 
+            ShippingCommands(appStore: appStore)
             CommandGroup(after: .newItem) {
                 Button("Etikett importieren …") {
-                    appStore.showImporter = true
+                    appStore.requestLabelImport()
                 }
                 .keyboardShortcut("o")
 
-                Button("Bluetooth-Suche starten") {
-                    appStore.bluetooth.startScanning()
+                Button("Briefmarken-Bündel importieren …") { appStore.showPostageImporter = true }
+
+                Button("Drucker verbinden …") {
+                    appStore.showPrinterConnection = true
                 }
                 .keyboardShortcut("r")
 
