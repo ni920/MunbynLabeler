@@ -138,15 +138,24 @@ create_icon_size 1024 icon_512x512@2x.png
 if [[ -d "$ICON_COMPOSER_SOURCE" ]]; then
   ASSET_COMPILER="$(/usr/bin/xcrun --find actool 2>/dev/null || true)"
   if [[ -n "$ASSET_COMPILER" && "${SELECTED_SDK_VERSION%%.*}" -ge 26 ]]; then
-    "$ASSET_COMPILER" "$ICON_COMPOSER_SOURCE" \
-      --compile "$APP_RESOURCES" \
+    # Compile optional layered assets separately. A format/renderer mismatch
+    # must never leave a partial Assets.car in the distributable app bundle.
+    ICON_COMPOSER_BUILD_DIR="$UNIVERSAL_BUILD_DIR/CompiledAppIcon"
+    rm -rf "$ICON_COMPOSER_BUILD_DIR"
+    mkdir -p "$ICON_COMPOSER_BUILD_DIR"
+    if "$ASSET_COMPILER" "$ICON_COMPOSER_SOURCE" \
+      --compile "$ICON_COMPOSER_BUILD_DIR" \
       --platform macosx --target-device mac \
       --minimum-deployment-target "$MIN_SYSTEM_VERSION" \
       --app-icon AppIcon \
       --output-partial-info-plist "$UNIVERSAL_BUILD_DIR/icon-info.plist" \
-      --output-format human-readable-text
-    test -f "$APP_RESOURCES/Assets.car"
-    echo "Layered Icon Composer asset compiled."
+      --output-format human-readable-text && \
+      [[ -f "$ICON_COMPOSER_BUILD_DIR/Assets.car" ]]; then
+      /usr/bin/ditto "$ICON_COMPOSER_BUILD_DIR/Assets.car" "$APP_RESOURCES/Assets.car"
+      echo "Layered Icon Composer asset compiled."
+    else
+      echo "Layered icon export unavailable; using the verified compatible ICNS icon." >&2
+    fi
   else
     echo "Modern actool unavailable: using the compatible ICNS icon; layered source retained."
   fi

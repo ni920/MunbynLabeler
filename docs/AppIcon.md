@@ -28,6 +28,8 @@ Die Prüfung umfasst JSON Schema Draft 2020-12 und sämtliche Asset-Verweise. Ke
 
 Der lokale Universal-Build verwendet den statischen ICNS-Fallback. Die elf ICNS-Einträge wurden vollständig geparst und auf PNG-Signatur, Dateilänge und Maße von 16–1024 Pixeln geprüft. Intel-/Apple-Silicon-Architekturen und Bundle-Signatur sind gültig. Das aktuelle App-Bundle und die frühere Icon-Quelle sind gesichert.
 
-Wenn Xcodes `actool` und ein SDK ab macOS 26 verfügbar sind, kompiliert der Build das Paket zusätzlich zu `Assets.car`. Dieser Pfad konnte hier nicht ausgeführt werden: Icon Composer, `ictool` und `actool` sind nicht installiert. Apples Download führt zur Apple-ID-Anmeldung. Die optionale Ground-Truth-Prüfung des Skills mit Apples Renderer ist deshalb offen; Schema-Validierung allein beweist nicht, dass Icon Composer jedes Material wie gewünscht rendert. Es wurde keine Anmeldung vorgenommen.
+Wenn Xcodes `actool` und ein SDK ab macOS 26 verfügbar sind, versucht der Build das Paket zusätzlich zu `Assets.car` zu kompilieren. Auf dem GitHub-Runner hat Xcode 26.3 den Export mit „The data couldn’t be read because it isn’t in the correct format“ abgelehnt. Das Release verwendet in diesem Fall das geprüfte kompatible ICNS-Icon. Der Export läuft in einem separaten Ordner; fehlgeschlagene oder unvollständige native Assets gelangen nicht ins App-Bundle.
+
+Lokal sind Icon Composer, `ictool` und `actool` nicht installiert. Apples Download führt zur Apple-ID-Anmeldung. Die native Materialdarstellung ist deshalb weiterhin offen; Schema-Validierung allein beweist keine Kompatibilität mit Apples Renderer. Es wurde keine Anmeldung vorgenommen.
 
 Die App verwendet weiterhin den Bundle-Identifier `de.nicosaia.MunbynLabeler`, damit Einstellungen und Druckverlauf erhalten bleiben. Das kompatible Icon ist lokal eingebaut; die dynamischen Materialeffekte des Apple-Renderers wurden hier mangels Icon Composer nicht visuell geprüft.
