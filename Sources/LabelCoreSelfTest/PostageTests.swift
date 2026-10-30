@@ -35,24 +35,49 @@ private func postageFixture(in directory: URL, count: Int) throws -> URL {
     return url
 }
 
-// PDFKit selection rectangles can include synthesized trailing spaces and text
-// from clipped neighbouring source stamps. Measure complete visible glyphs only.
-private func visibleTextWidth(_ text: String, on page: PDFPage) throws -> Double {
-    let value = (page.string ?? "") as NSString
-    var search = NSRange(location: 0, length: value.length)
-    while search.length > 0 {
-        let range = value.range(of: text, range: search)
-        guard range.location != NSNotFound else { break }
-        var bounds = CGRect.null
-        for index in range.location..<NSMaxRange(range) {
-            if value.substring(with: NSRange(location: index, length: 1)).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
-            bounds = bounds.union(page.characterBounds(at: index))
-        }
-        if !bounds.isNull && page.bounds(for: .mediaBox).contains(bounds) { return bounds.width }
-        let next = NSMaxRange(range)
-        search = NSRange(location: next, length: value.length - next)
+// Compare rendered ink at the same physical resolution. PDFKit text selections
+// can include synthesized spaces or clipped neighbouring source text on macOS 15.
+private func inkWidth(on page: CGPDFPage, in region: CGRect) throws -> Int {
+    let scale = 4.0
+    let width = Int(ceil(region.width * scale)), height = Int(ceil(region.height * scale))
+    var pixels = [UInt8](repeating: 255, count: width * height)
+    guard let context = CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                  bitmapInfo: CGImageAlphaInfo.none.rawValue) else {
+        throw SelfTestFailure.assertion("Cannot rasterize postage-size fixture")
     }
-    throw SelfTestFailure.assertion("No complete visible postage header found")
+    context.scaleBy(x: scale, y: scale)
+    context.translateBy(x: -region.minX, y: -region.minY)
+    context.drawPDFPage(page)
+    var minX = width, maxX = -1
+    for y in 0..<height {
+        for x in 0..<width where pixels[y * width + x] < 128 {
+            minX = min(minX, x); maxX = max(maxX, x)
+        }
+    }
+    return maxX >= minX ? maxX - minX + 1 : 0
+}
+
+private func checkOriginalInkSize(stamps: [PostageStamp], outputs: [(URL, [String])], format: LabelFormat) throws {
+    let first = stamps[0]
+    let sourcePage = PDFDocument(url: first.sourceURL)!.page(at: first.pageNumber - 1)!
+    let text = sourcePage.string! as NSString
+    let header = sourcePage.selection(for: text.range(of: "IM 01.01.26 1,80"))!.bounds(for: sourcePage)
+    let relative = header.insetBy(dx: -2, dy: -1).offsetBy(dx: -first.sourceRect.minX, dy: -first.sourceRect.minY)
+    let layout = PostageSheetLayout(stampSizes: stamps.map(\.sourceRect.size), format: format)
+    for (index, output) in outputs.enumerated() {
+        let outputPage = CGPDFDocument(output.0 as CFURL)!.page(at: 1)!
+        for placement in layout.sheets[index] {
+            let stamp = stamps[placement.stampIndex]
+            let originalPage = CGPDFDocument(stamp.sourceURL as CFURL)!.page(at: stamp.pageNumber)!
+            let sourceRegion = relative.offsetBy(dx: stamp.sourceRect.minX, dy: stamp.sourceRect.minY)
+            let outputRegion = relative.offsetBy(dx: placement.rect.minX, dy: placement.rect.minY)
+            let sourceWidth = try inkWidth(on: originalPage, in: sourceRegion)
+            let outputWidth = try inkWidth(on: outputPage, in: outputRegion)
+            try require(sourceWidth > 0 && abs(sourceWidth - outputWidth) <= 1,
+                        "Postage ink changed physical size: source=\(sourceWidth), output=\(outputWidth), format=\(format.sizeDescription)")
+        }
+    }
 }
 
 func runPostageTests() throws {
@@ -89,8 +114,6 @@ func runPostageTests() throws {
     let outputs = try PostagePDFService.writeSheets(stamps: stamps, format: .product100x50, cutGuides: true, directory: root)
     try require(outputs.count == 3 && Set(outputs.flatMap { $0.1 }) == Set(stamps.map(\.id)), "Generated sheets lost stamp identifiers")
     let header = "IM 01.01.26 1,80"
-    let sourcePage = PDFDocument(url: fixture)!.page(at: 0)!
-    let sourceWidth = try visibleTextWidth(header, on: sourcePage)
     for output in outputs {
         guard let document = PDFDocument(url: output.0), let page = document.page(at: 0), let value = page.string else {
             throw SelfTestFailure.assertion("Generated stamp sheet cannot be read")
@@ -98,9 +121,8 @@ func runPostageTests() throws {
         try require(document.pageCount == 1, "Each print job must contain one label")
         try require(abs(page.bounds(for: .mediaBox).width - 100 * 72 / 25.4) < 0.01, "Output label has the wrong size")
         try require(value.components(separatedBy: header).count - 1 == 4, "Generated label is missing stamp text")
-        let width = try visibleTextWidth(header, on: page)
-        try require(abs(width - sourceWidth) < 0.01, "PDF composition scaled the postage text")
     }
+    try checkOriginalInkSize(stamps: stamps, outputs: outputs, format: .product100x50)
     // Continuous-stock preparation must preserve original stamp size and identity
     // without needing a printer or firmware handshake.
     let continuousDirectory = root.appendingPathComponent("continuous")
@@ -114,9 +136,8 @@ func runPostageTests() throws {
         let bounds = page.bounds(for: .mediaBox)
         try require(abs(bounds.width - 100 * 72 / 25.4) < 0.01 && abs(bounds.height - 55 * 72 / 25.4) < 0.01,
                     "Continuous sheet must use the selected 100 × 55 mm cut length")
-        let width = try visibleTextWidth(header, on: page)
-        try require(abs(width - sourceWidth) < 0.01, "Continuous preparation changed visible text size: source=\(sourceWidth), output=\(width)")
     }
+    try checkOriginalInkSize(stamps: stamps, outputs: continuousOutputs, format: .continuousLetter100x55)
     do {
         _ = try PostagePDFService.readStamps(from: postageFixture(in: root, count: 0))
         throw SelfTestFailure.assertion("Blank PDFs should not be accepted as postage bundles")
