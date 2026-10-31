@@ -109,8 +109,11 @@ struct PostageMaterialRequirement: View {
 
     var body: some View {
         if appStore.labelStockMode == .continuous100 && !bluetooth.supportsContinuousStock {
+            // No vertical fixedSize: next to a List it is measured at zero width,
+            // which demanded a window height of >2000 pt and left the window blank.
             Label("Zum Drucken von Briefmarken auf Endlosrolle den RW403B mit Firmware ab 1.1.49 über Bluetooth verbinden. Die Vorschau kannst du bereits vorbereiten.", systemImage: "info.circle")
-                .font(.callout).fixedSize(horizontal: false, vertical: true)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
