@@ -53,67 +53,42 @@ struct PostageBundleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Briefmarkenbestand").font(.title2.weight(.semibold))
-                    Text("Mehrere Internetmarken in Originalgröße auf einem Etikett.").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Drucklayout")
+                    .font(.headline)
+                HStack(alignment: .bottom, spacing: 20) {
+                    PostageFormatControls(appStore: appStore, formatID: $formatID)
+                    Toggle("Schnittlinien", isOn: $cutGuides)
                 }
-                Spacer()
-                Button("PDF-Bündel importieren …") { appStore.showPostageImporter = true }
-                    .disabled(busy)
             }
-            HStack {
-                PostageFormatControls(appStore: appStore, formatID: $formatID)
-                Toggle("Schnittlinien", isOn: $cutGuides)
-                Spacer()
-            }.disabled(busy)
+            .disabled(busy)
+
             if store.entries.isEmpty {
-                ContentUnavailableView("Briefmarken-PDF auswählen", systemImage: "rectangle.stack",
-                    description: Text("Die App erkennt die einzelnen Marken im Bündel und ordnet deine Auswahl platzsparend an."))
+                ContentUnavailableView {
+                    Label("Noch keine Briefmarken", systemImage: "rectangle.stack")
+                } description: {
+                    Text("Importiere ein PDF-Bündel. Die App erkennt die Marken und ordnet deine Auswahl platzsparend an.")
+                } actions: {
+                    Button("PDF-Bündel importieren …") {
+                        appStore.showPostageImporter = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy)
+                }
             } else {
-                HStack {
-                    Button("Alle auswählen") { appStore.selectedPostageIDs = Set(store.entries.filter { $0.status == .available }.map(\.id)) }
-                    Button("Auswahl aufheben") { appStore.selectedPostageIDs = [] }
-                        .disabled(selected.isEmpty)
-                    Menu {
-                        Button {
-                            copiedSelection = copyTrackingNumbers(selected)
-                        } label: {
-                            Label(copiedSelection ? "Nummern kopiert" : "Sendungsnummern kopieren", systemImage: copiedSelection ? "checkmark" : "doc.on.doc")
+                HStack(alignment: .center) {
+                    Picker("Anzeigen", selection: $filter) {
+                        ForEach(PostageStockFilter.allCases) { option in
+                            Text(count(for: option)).tag(option)
                         }
-                        Button {
-                            markUsedIDs = selectedIDs
-                        } label: {
-                            Label("Als genutzt markieren …", systemImage: "checkmark.circle")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            deleteIDs = selectedIDs
-                        } label: {
-                            Label("Aus Bestand löschen …", systemImage: "trash")
-                        }
-                    } label: {
-                        Label("Auswahl (\(selected.count))", systemImage: "checkmark.circle")
                     }
-                    .disabled(selected.isEmpty)
-                    .help("Aktionen für die ausgewählten Briefmarken")
-                    .task(id: copiedSelection) {
-                        guard copiedSelection else { return }
-                        try? await Task.sleep(for: .seconds(2))
-                        if !Task.isCancelled { copiedSelection = false }
-                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: 420)
                     Spacer()
                     Text("\(availableCount) verfügbar · \(usedCount) genutzt")
                         .foregroundStyle(.secondary)
-                }.disabled(busy)
-                Picker("Anzeigen", selection: $filter) {
-                    ForEach(PostageStockFilter.allCases) { option in
-                        Text(count(for: option)).tag(option)
-                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 420)
                 if visibleEntries.isEmpty {
                     ContentUnavailableView(filter == .used ? "Noch keine Marke genutzt" : "Keine verfügbaren Marken",
                         systemImage: filter == .used ? "clock.arrow.circlepath" : "rectangle.stack",
@@ -151,6 +126,24 @@ struct PostageBundleView: View {
         .padding(24)
         .navigationTitle("Briefmarken")
         .onChange(of: appStore.selectedPostageIDs) { _, _ in copiedSelection = false }
+        .task(id: copiedSelection) {
+            guard copiedSelection else { return }
+            try? await Task.sleep(for: .seconds(2))
+            if !Task.isCancelled { copiedSelection = false }
+        }
+        .toolbar {
+            if availableCount > 0 {
+                ToolbarItem {
+                    Menu {
+                        selectionActions
+                    } label: {
+                        Label(selected.isEmpty ? "Auswahl" : "Auswahl (\(selected.count))", systemImage: "checkmark.circle")
+                    }
+                    .disabled(busy)
+                    .help("Verfügbare Briefmarken auswählen und verwalten")
+                }
+            }
+        }
         .alert("Marke erneut verwenden?", isPresented: Binding(
             get: { releaseEntry != nil }, set: { if !$0 { releaseEntry = nil } }
         )) {
@@ -204,7 +197,7 @@ struct PostageBundleView: View {
                     else { appStore.selectedPostageIDs.remove(entry.id) }
                 })) { Text("Marke \(entry.stamp.number) · \(entry.stamp.amount) €") }
                 .disabled(entry.status != .available || busy)
-            PostageTrackingNumberView(stamp: entry.stamp)
+            PostageTrackingNumberView(stamp: entry.stamp, showsCopyButton: false)
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(entry.status.title).foregroundStyle(entry.status == .checkPrint ? .orange : .secondary)
@@ -212,49 +205,119 @@ struct PostageBundleView: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            if let flow = pendingLetterFlow(for: entry), entry.status == .checkPrint || entry.status == .printed {
-                Button("Im Briefversand prüfen") { appStore.letterFlowPreview = flow }
-            } else if entry.status == .checkPrint {
-                Button("Als gedruckt markieren") { store.update([entry.id], status: .printed) }
-                Button("Erneut verwenden …") { releaseEntry = entry }
-            } else if entry.status == .printed {
-                Button("Erneut verwenden …") { releaseEntry = entry }
-                    .help("Nach einem Fehldruck die Marke wieder für einen neuen Druck freigeben.")
+            Menu {
+                entryActions(for: entry)
+            } label: {
+                Label("Weitere Aktionen", systemImage: "ellipsis")
+                    .labelStyle(.iconOnly)
             }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Aktionen für Marke \(entry.stamp.number)")
         }
         .padding(.vertical, 4)
         .disabled(busy)
         .contextMenu {
-            if entry.status == .available {
+            entryActions(for: entry)
+        }
+    }
+
+    @ViewBuilder
+    private var selectionActions: some View {
+        Button {
+            appStore.selectedPostageIDs = Set(store.entries.filter { $0.status == .available }.map(\.id))
+        } label: {
+            Label("Alle verfügbaren auswählen", systemImage: "checkmark.circle")
+        }
+        .disabled(selected.count == availableCount)
+
+        Button {
+            appStore.selectedPostageIDs = []
+        } label: {
+            Label("Auswahl aufheben", systemImage: "xmark.circle")
+        }
+        .disabled(selected.isEmpty)
+
+        Divider()
+
+        Button {
+            copiedSelection = copyTrackingNumbers(selected)
+        } label: {
+            Label(copiedSelection ? "Nummern kopiert" : "Sendungsnummern kopieren", systemImage: copiedSelection ? "checkmark" : "doc.on.doc")
+        }
+        .disabled(selected.isEmpty)
+
+        Button {
+            markUsedIDs = selectedIDs
+        } label: {
+            Label("Als genutzt markieren …", systemImage: "checkmark.circle")
+        }
+        .disabled(selected.isEmpty)
+
+        Divider()
+
+        Button(role: .destructive) {
+            deleteIDs = selectedIDs
+        } label: {
+            Label("Aus Bestand löschen …", systemImage: "trash")
+        }
+        .disabled(selected.isEmpty)
+    }
+
+    @ViewBuilder
+    private func entryActions(for entry: PostageStampStore.Entry) -> some View {
+        if let flow = pendingLetterFlow(for: entry), entry.status == .checkPrint || entry.status == .printed {
+            Button {
+                appStore.letterFlowPreview = flow
+            } label: {
+                Label("Im Briefversand prüfen", systemImage: "envelope")
+            }
+        } else {
+            if entry.status == .checkPrint {
                 Button {
-                    markUsedIDs = [entry.id]
+                    markPrinted(entry)
                 } label: {
-                    Label("Als genutzt markieren …", systemImage: "checkmark.circle")
+                    Label("Als gedruckt markieren", systemImage: "checkmark.circle")
                 }
             }
-            if (entry.status == .printed || entry.status == .checkPrint) && pendingLetterFlow(for: entry) == nil {
+            if entry.status == .printed || entry.status == .checkPrint {
                 Button {
                     releaseEntry = entry
                 } label: {
                     Label("Erneut verwenden …", systemImage: "arrow.uturn.backward")
                 }
             }
-            if entry.stamp.trackingNumber != nil {
-                Button {
-                    copyTrackingNumbers([entry.stamp])
-                } label: {
-                    Label("Sendungsnummer kopieren", systemImage: "doc.on.doc")
-                }
-            }
-            if entry.status == .available {
-                Divider()
-                Button(role: .destructive) {
-                    deleteIDs = [entry.id]
-                } label: {
-                    Label("Aus Bestand löschen …", systemImage: "trash")
-                }
+        }
+
+        if entry.stamp.trackingNumber != nil {
+            Button {
+                copyTrackingNumbers([entry.stamp])
+            } label: {
+                Label("Sendungsnummer kopieren", systemImage: "doc.on.doc")
             }
         }
+
+        if entry.status == .available {
+            Button {
+                markUsedIDs = [entry.id]
+            } label: {
+                Label("Als genutzt markieren …", systemImage: "checkmark.circle")
+            }
+            Divider()
+            Button(role: .destructive) {
+                deleteIDs = [entry.id]
+            } label: {
+                Label("Aus Bestand löschen …", systemImage: "trash")
+            }
+        }
+    }
+
+    private func markPrinted(_ entry: PostageStampStore.Entry) {
+        guard store.update([entry.id], status: .printed) else {
+            appStore.lastMessage = store.storageError ?? "Die Marke konnte nicht als gedruckt markiert werden."
+            return
+        }
+        appStore.lastMessage = "Briefmarke wurde als gedruckt markiert."
     }
 
     private func markSelectedUsed() {
@@ -389,6 +452,7 @@ struct PostagePrintPreviewView: View {
 struct PostageTrackingNumberView: View {
     let stamp: PostageStamp
     var showTitle = true
+    var showsCopyButton = true
     @State private var copied = false
 
     var body: some View {
@@ -398,14 +462,16 @@ struct PostageTrackingNumberView: View {
                 HStack(spacing: 6) {
                     Text(number).font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
-                    Button {
-                        copied = copyTrackingNumbers([stamp])
-                    } label: {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    if showsCopyButton {
+                        Button {
+                            copied = copyTrackingNumbers([stamp])
+                        } label: {
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Sendungsnummer von Marke \(stamp.number) kopieren")
+                        .help(copied ? "Sendungsnummer kopiert" : "Vollständige Sendungsnummer kopieren")
                     }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Sendungsnummer von Marke \(stamp.number) kopieren")
-                    .help(copied ? "Sendungsnummer kopiert" : "Vollständige Sendungsnummer kopieren")
                 }
             }
             .task(id: copied) {
