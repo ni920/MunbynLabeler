@@ -164,6 +164,11 @@ func runPostageTests() throws {
         let reopened = PostageStampStore(directory: libraryDirectory)
         try require(reopened.entries[0].status == .printed && reopened.entries[0].printCount == 2, "Reprint history was not persisted")
         try require(reopened.entries.filter(\.isUsed).count == 4, "Used stamp overview count is wrong")
+        try require(!reopened.delete([ids[1]]), "Used stamps must not be deleted through the available-stock action")
+        try require(reopened.delete([ids[4]]), "Selected available stamp could not be deleted")
+        let afterDeletion = PostageStampStore(directory: libraryDirectory)
+        try require(afterDeletion.entries.count == 11 && !afterDeletion.entries.contains { $0.id == ids[4] },
+                    "Deleted stamp was not removed from persistent stock")
         let legacyEntry = #"[{"stamp":{"id":"AB123456780000000001","sourceURL":"file:///tmp/x.pdf","pageNumber":1,"number":1,"amount":"1,80","sourceRect":[[0,0],[1,1]]},"status":"printed"}]"#
         let legacy = try JSONDecoder().decode([PostageStampStore.Entry].self, from: Data(legacyEntry.utf8))
         try require(legacy[0].status == .printed && legacy[0].printCount == nil, "Libraries from older versions must still load")

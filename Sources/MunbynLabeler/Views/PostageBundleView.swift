@@ -32,13 +32,18 @@ struct PostageBundleView: View {
     @AppStorage("postageLabelFormatID") private var formatID = LabelFormat.shipping100x150.id
     @AppStorage("postageCutGuides") private var cutGuides = true
     @State private var releaseEntry: PostageStampStore.Entry?
-    @State private var markUsedEntry: PostageStampStore.Entry?
+    @State private var markUsedIDs: Set<String> = []
+    @State private var deleteIDs: Set<String> = []
     @State private var filter: PostageStockFilter = .available
     @State private var copiedSelection = false
 
     private var format: LabelFormat { appStore.postageFormat(for: formatID) }
+    private var selectedEntries: [PostageStampStore.Entry] {
+        store.entries.filter { appStore.selectedPostageIDs.contains($0.id) && $0.status == .available }
+    }
+    private var selectedIDs: Set<String> { Set(selectedEntries.map(\.id)) }
     private var selected: [PostageStamp] {
-        store.entries.filter { appStore.selectedPostageIDs.contains($0.id) && $0.status == .available }.map(\.stamp)
+        selectedEntries.map(\.stamp)
     }
     private var layout: PostageSheetLayout { PostageSheetLayout(stampSizes: selected.map { $0.sourceRect.size }, format: format) }
     private var busy: Bool { appStore.printInProgress || appStore.printingPostageBatch }
@@ -68,12 +73,30 @@ struct PostageBundleView: View {
             } else {
                 HStack {
                     Button("Alle auswählen") { appStore.selectedPostageIDs = Set(store.entries.filter { $0.status == .available }.map(\.id)) }
-                    Button("Keine") { appStore.selectedPostageIDs = [] }
-                    Button(copiedSelection ? "Nummern kopiert" : "Nummern kopieren") {
-                        copiedSelection = copyTrackingNumbers(selected)
+                    Button("Auswahl aufheben") { appStore.selectedPostageIDs = [] }
+                        .disabled(selected.isEmpty)
+                    Menu {
+                        Button {
+                            copiedSelection = copyTrackingNumbers(selected)
+                        } label: {
+                            Label(copiedSelection ? "Nummern kopiert" : "Sendungsnummern kopieren", systemImage: copiedSelection ? "checkmark" : "doc.on.doc")
+                        }
+                        Button {
+                            markUsedIDs = selectedIDs
+                        } label: {
+                            Label("Als genutzt markieren …", systemImage: "checkmark.circle")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            deleteIDs = selectedIDs
+                        } label: {
+                            Label("Aus Bestand löschen …", systemImage: "trash")
+                        }
+                    } label: {
+                        Label("Auswahl (\(selected.count))", systemImage: "checkmark.circle")
                     }
                     .disabled(selected.isEmpty)
-                    .help("Die vollständigen Sendungsnummern der Auswahl, jeweils in einer eigenen Zeile.")
+                    .help("Aktionen für die ausgewählten Briefmarken")
                     .task(id: copiedSelection) {
                         guard copiedSelection else { return }
                         try? await Task.sleep(for: .seconds(2))
@@ -140,17 +163,20 @@ struct PostageBundleView: View {
                 releaseEntry = nil
             }
         } message: { Text("Nur verwenden, wenn der bisherige Ausdruck dieser Marke unbrauchbar ist und vernichtet wurde. Jede gekaufte Marke darf nur einmal für eine Sendung verwendet werden. Die Marke wird für den nächsten Druck ausgewählt.") }
-        .alert("Marke als genutzt markieren?", isPresented: Binding(
-            get: { markUsedEntry != nil }, set: { if !$0 { markUsedEntry = nil } }
+        .alert(markUsedIDs.count == 1 ? "Briefmarke als genutzt markieren?" : "\(markUsedIDs.count) Briefmarken als genutzt markieren?", isPresented: Binding(
+            get: { !markUsedIDs.isEmpty }, set: { if !$0 { markUsedIDs = [] } }
         )) {
-            Button("Abbrechen", role: .cancel) { markUsedEntry = nil }
-            Button("Als genutzt markieren") {
-                if let entry = markUsedEntry, store.update([entry.id], status: .printed) {
-                    appStore.selectedPostageIDs.remove(entry.id)
-                }
-                markUsedEntry = nil
-            }
+            Button("Abbrechen", role: .cancel) { markUsedIDs = [] }
+            Button("Als genutzt markieren", action: markSelectedUsed)
         } message: { Text("Zum Beispiel, wenn die Marke außerhalb der App gedruckt wurde. Sie wird danach nicht mehr zum Drucken angeboten.") }
+        .alert(deleteIDs.count == 1 ? "Briefmarke löschen?" : "\(deleteIDs.count) Briefmarken löschen?", isPresented: Binding(
+            get: { !deleteIDs.isEmpty }, set: { if !$0 { deleteIDs = [] } }
+        )) {
+            Button("Abbrechen", role: .cancel) { deleteIDs = [] }
+            Button(deleteIDs.count == 1 ? "Briefmarke löschen" : "Briefmarken löschen", role: .destructive, action: deleteSelected)
+        } message: {
+            Text("Die Auswahl wird dauerhaft aus dem Bestand entfernt. Ein erneuter Import des PDF-Bündels fügt die Marken wieder hinzu.")
+        }
     }
 
     private func count(for option: PostageStockFilter) -> String {
@@ -200,14 +226,69 @@ struct PostageBundleView: View {
         .disabled(busy)
         .contextMenu {
             if entry.status == .available {
-                Button("Als genutzt markieren …") { markUsedEntry = entry }
+                Button {
+                    markUsedIDs = [entry.id]
+                } label: {
+                    Label("Als genutzt markieren …", systemImage: "checkmark.circle")
+                }
             }
             if (entry.status == .printed || entry.status == .checkPrint) && pendingLetterFlow(for: entry) == nil {
-                Button("Erneut verwenden …") { releaseEntry = entry }
+                Button {
+                    releaseEntry = entry
+                } label: {
+                    Label("Erneut verwenden …", systemImage: "arrow.uturn.backward")
+                }
             }
             if entry.stamp.trackingNumber != nil {
-                Button("Sendungsnummer kopieren") { copyTrackingNumbers([entry.stamp]) }
+                Button {
+                    copyTrackingNumbers([entry.stamp])
+                } label: {
+                    Label("Sendungsnummer kopieren", systemImage: "doc.on.doc")
+                }
             }
+            if entry.status == .available {
+                Divider()
+                Button(role: .destructive) {
+                    deleteIDs = [entry.id]
+                } label: {
+                    Label("Aus Bestand löschen …", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func markSelectedUsed() {
+        let ids = markUsedIDs
+        defer { markUsedIDs = [] }
+        guard ids.allSatisfy({ id in
+            store.entries.contains { $0.id == id && $0.status == .available }
+        }), store.update(Array(ids), status: .printed) else {
+            appStore.lastMessage = store.storageError ?? "Die Auswahl konnte nicht als genutzt markiert werden."
+            return
+        }
+        clearSelectionReferences(to: ids)
+        appStore.lastMessage = ids.count == 1
+            ? "Briefmarke wurde als genutzt markiert."
+            : "\(ids.count) Briefmarken wurden als genutzt markiert."
+    }
+
+    private func deleteSelected() {
+        let ids = deleteIDs
+        defer { deleteIDs = [] }
+        guard store.delete(Array(ids)) else {
+            appStore.lastMessage = store.storageError ?? "Die Auswahl konnte nicht gelöscht werden."
+            return
+        }
+        clearSelectionReferences(to: ids)
+        appStore.lastMessage = ids.count == 1
+            ? "Briefmarke wurde aus dem Bestand gelöscht."
+            : "\(ids.count) Briefmarken wurden aus dem Bestand gelöscht."
+    }
+
+    private func clearSelectionReferences(to ids: Set<String>) {
+        appStore.selectedPostageIDs.subtract(ids)
+        if ids.contains(appStore.selectedLetterPostageID) {
+            appStore.selectedLetterPostageID = ""
         }
     }
 

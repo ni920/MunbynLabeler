@@ -130,6 +130,16 @@ public final class PostageStampStore: ObservableObject {
         return commit(updated)
     }
 
+    @discardableResult
+    public func delete(_ ids: [String]) -> Bool {
+        guard storageError == nil else { return false }
+        let selected = Set(ids)
+        guard !selected.isEmpty, selected.allSatisfy({ id in
+            entries.contains { $0.id == id && $0.status == .available }
+        }) else { return false }
+        return commit(entries.filter { !selected.contains($0.id) })
+    }
+
     private func commit(_ updated: [Entry]) -> Bool {
         do {
             try persist(updated)
