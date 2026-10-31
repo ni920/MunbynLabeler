@@ -7,3 +7,13 @@
 dist/
 SafariExtension/
 .DS_Store
+.idea/libraries/dist.xml
+.idea/libraries/Resources.xml
+.idea/libraries/Resources2.xml
+.idea/libraries/Resources3.xml
+.idea/libraries/Resources4.xml
+.idea/libraries/Resources5.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/MunbynLabeler.iml
+.idea/vcs.xml
