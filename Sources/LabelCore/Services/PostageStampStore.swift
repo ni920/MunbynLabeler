@@ -20,7 +20,18 @@ public final class PostageStampStore: ObservableObject {
         public var stamp: PostageStamp
         public var status: Status = .available
         public var reservationID: UUID?
+        /// Optional so libraries saved by older versions keep loading.
+        public var printedAt: Date?
+        public var printCount: Int?
+        public var releasedAt: Date?
         public var id: String { stamp.id }
+        public var isUsed: Bool { status == .printed || status == .checkPrint || status == .printing }
+
+        public init(stamp: PostageStamp, status: Status = .available, reservationID: UUID? = nil,
+                    printedAt: Date? = nil, printCount: Int? = nil, releasedAt: Date? = nil) {
+            self.stamp = stamp; self.status = status; self.reservationID = reservationID
+            self.printedAt = printedAt; self.printCount = printCount; self.releasedAt = releasedAt
+        }
     }
     @Published public private(set) var entries: [Entry] = []
     @Published public private(set) var storageError: String?
@@ -91,8 +102,30 @@ public final class PostageStampStore: ObservableObject {
         let selected = Set(ids)
         var updated = entries
         for index in updated.indices where selected.contains(updated[index].id) {
+            if status == .printed && updated[index].status != .printed {
+                updated[index].printedAt = Date()
+                updated[index].printCount = (updated[index].printCount ?? 0) + 1
+            }
             updated[index].status = status
             if status == .available { updated[index].reservationID = nil }
+        }
+        return commit(updated)
+    }
+
+    /// Returns already printed or unconfirmed stamps to the available stock,
+    /// e.g. after a misprint. The print history (date and count) is kept.
+    @discardableResult
+    public func reuse(_ ids: [String]) -> Bool {
+        guard storageError == nil else { return false }
+        let selected = Set(ids)
+        guard !selected.isEmpty, selected.allSatisfy({ id in
+            entries.contains { $0.id == id && ($0.status == .printed || $0.status == .checkPrint) }
+        }) else { return false }
+        var updated = entries
+        for index in updated.indices where selected.contains(updated[index].id) {
+            updated[index].status = .available
+            updated[index].reservationID = nil
+            updated[index].releasedAt = Date()
         }
         return commit(updated)
     }

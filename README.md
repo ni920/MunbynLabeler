@@ -418,6 +418,22 @@ beendet die Serie nach dem laufenden Etikett. Unter **Material** können auch
 100-mm-Endlosrollen gewählt werden; dafür stehen 100 mm breite Formate zur Auswahl.
 Die Vorschau funktioniert ohne Druckerverbindung, der Endlosdruck benötigt Firmware ab 1.1.49.
 
+### Bestand verwalten und Fehldrucke wiederholen
+
+Oberhalb der Markenliste wechselt **Verfügbar / Genutzt / Alle** die Ansicht.
+Unter **Genutzt** stehen gedruckte und zu prüfende Marken mit Druckdatum,
+Anzahl der Drucke und – bei einem Briefablauf – dem Empfänger.
+
+Ist ein Ausdruck unbrauchbar (zum Beispiel verschmiert, abgeschnitten oder
+falsch eingelegt), führt **Erneut verwenden …** die Marke nach einer Bestätigung
+zurück in den verfügbaren Bestand und wählt sie direkt für den nächsten Druck aus.
+Druckdatum und -anzahl bleiben erhalten; die Marke ist als **Nach Fehldruck
+freigegeben** gekennzeichnet. Den fehlerhaften Ausdruck vorher vernichten, denn
+jede Marke darf nur einmal für eine Sendung verwendet werden. Gehört die Marke zu
+einem noch nicht abgeschlossenen Briefablauf, erfolgt die Klärung über
+**Im Briefversand prüfen**. Per Rechtsklick lässt sich eine verfügbare Marke
+außerdem **Als genutzt markieren**, etwa wenn sie außerhalb der App gedruckt wurde.
+
 ## Geführter Modus
 
 Beim ersten Start ist unter **Versenden** der geführte Modus aktiv. Oben lässt

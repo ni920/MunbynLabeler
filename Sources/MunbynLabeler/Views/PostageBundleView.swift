@@ -7,12 +7,33 @@ struct PostagePrintBatch: Identifiable {
     let jobs: [PrintJob]
 }
 
+enum PostageStockFilter: String, CaseIterable, Identifiable {
+    case available, used, all
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .available: "Verfügbar"
+        case .used: "Genutzt"
+        case .all: "Alle"
+        }
+    }
+    func includes(_ entry: PostageStampStore.Entry) -> Bool {
+        switch self {
+        case .available: !entry.isUsed
+        case .used: entry.isUsed
+        case .all: true
+        }
+    }
+}
+
 struct PostageBundleView: View {
     @ObservedObject var appStore: AppStore
     @ObservedObject var store: PostageStampStore
     @AppStorage("postageLabelFormatID") private var formatID = LabelFormat.shipping100x150.id
     @AppStorage("postageCutGuides") private var cutGuides = true
     @State private var releaseEntry: PostageStampStore.Entry?
+    @State private var markUsedEntry: PostageStampStore.Entry?
+    @State private var filter: PostageStockFilter = .available
     @State private var copiedSelection = false
 
     private var format: LabelFormat { appStore.postageFormat(for: formatID) }
@@ -21,6 +42,9 @@ struct PostageBundleView: View {
     }
     private var layout: PostageSheetLayout { PostageSheetLayout(stampSizes: selected.map { $0.sourceRect.size }, format: format) }
     private var busy: Bool { appStore.printInProgress || appStore.printingPostageBatch }
+    private var visibleEntries: [PostageStampStore.Entry] { store.entries.filter(filter.includes) }
+    private var availableCount: Int { store.entries.filter { $0.status == .available }.count }
+    private var usedCount: Int { store.entries.filter(\.isUsed).count }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -56,30 +80,23 @@ struct PostageBundleView: View {
                         if !Task.isCancelled { copiedSelection = false }
                     }
                     Spacer()
-                    Text("\(store.entries.filter { $0.status == .available }.count) verfügbar · \(store.entries.filter { $0.status == .printed }.count) gedruckt")
+                    Text("\(availableCount) verfügbar · \(usedCount) genutzt")
                         .foregroundStyle(.secondary)
                 }.disabled(busy)
-                List(store.entries) { entry in
-                    HStack(spacing: 14) {
-                        Toggle(isOn: Binding(
-                            get: { appStore.selectedPostageIDs.contains(entry.id) && entry.status == .available },
-                            set: { value in
-                                if value { appStore.selectedPostageIDs.insert(entry.id) }
-                                else { appStore.selectedPostageIDs.remove(entry.id) }
-                            })) { Text("Marke \(entry.stamp.number) · \(entry.stamp.amount) €") }
-                            .disabled(entry.status != .available || busy)
-                        PostageTrackingNumberView(stamp: entry.stamp)
-                        Spacer()
-                        Text(entry.status.title).foregroundStyle(entry.status == .checkPrint ? .orange : .secondary)
-                        if entry.status == .checkPrint {
-                          if let flowID = entry.reservationID, let flow = appStore.letterFlows.flow(flowID) {
-                            Button("Im Briefversand prüfen") { appStore.letterFlowPreview = flow }
-                          } else {
-                            Button("Als gedruckt markieren") { store.update([entry.id], status: .printed) }
-                            Button("Freigeben …") { releaseEntry = entry }
-                          }
-                        }
-                    }.padding(.vertical, 4)
+                Picker("Anzeigen", selection: $filter) {
+                    ForEach(PostageStockFilter.allCases) { option in
+                        Text(count(for: option)).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 420)
+                if visibleEntries.isEmpty {
+                    ContentUnavailableView(filter == .used ? "Noch keine Marke genutzt" : "Keine verfügbaren Marken",
+                        systemImage: filter == .used ? "clock.arrow.circlepath" : "rectangle.stack",
+                        description: Text(filter == .used ? "Gedruckte Marken erscheinen hier mit Druckdatum und lassen sich nach einem Fehldruck erneut verwenden." : "Neues PDF-Bündel importieren oder unter „Genutzt“ eine fehlgedruckte Marke erneut verwenden."))
+                } else {
+                    List(visibleEntries) { entry in row(entry) }
                 }
             }
             if appStore.printingPostageBatch {
@@ -111,15 +128,100 @@ struct PostageBundleView: View {
         .padding(24)
         .navigationTitle("Briefmarken")
         .onChange(of: appStore.selectedPostageIDs) { _, _ in copiedSelection = false }
-        .alert("Marke wieder zum Drucken freigeben?", isPresented: Binding(
+        .alert("Marke erneut verwenden?", isPresented: Binding(
             get: { releaseEntry != nil }, set: { if !$0 { releaseEntry = nil } }
         )) {
             Button("Abbrechen", role: .cancel) { releaseEntry = nil }
-            Button("Freigeben") {
-                if let entry = releaseEntry { store.update([entry.id], status: .available) }
+            Button("Erneut verwenden") {
+                if let entry = releaseEntry, store.reuse([entry.id]) {
+                    appStore.selectedPostageIDs.insert(entry.id)
+                    filter = .available
+                }
                 releaseEntry = nil
             }
-        } message: { Text("Nur freigeben, wenn der letzte Ausdruck dieser Marke nicht verwendbar ist. Jede gekaufte Marke darf einmal für eine Sendung verwendet werden.") }
+        } message: { Text("Nur verwenden, wenn der bisherige Ausdruck dieser Marke unbrauchbar ist und vernichtet wurde. Jede gekaufte Marke darf nur einmal für eine Sendung verwendet werden. Die Marke wird für den nächsten Druck ausgewählt.") }
+        .alert("Marke als genutzt markieren?", isPresented: Binding(
+            get: { markUsedEntry != nil }, set: { if !$0 { markUsedEntry = nil } }
+        )) {
+            Button("Abbrechen", role: .cancel) { markUsedEntry = nil }
+            Button("Als genutzt markieren") {
+                if let entry = markUsedEntry, store.update([entry.id], status: .printed) {
+                    appStore.selectedPostageIDs.remove(entry.id)
+                }
+                markUsedEntry = nil
+            }
+        } message: { Text("Zum Beispiel, wenn die Marke außerhalb der App gedruckt wurde. Sie wird danach nicht mehr zum Drucken angeboten.") }
+    }
+
+    private func count(for option: PostageStockFilter) -> String {
+        switch option {
+        case .available: "Verfügbar (\(availableCount))"
+        case .used: "Genutzt (\(usedCount))"
+        case .all: "Alle (\(store.entries.count))"
+        }
+    }
+
+    /// A stamp tied to an unfinished letter flow must be resolved there, so
+    /// address and stamp progress stay consistent.
+    private func pendingLetterFlow(for entry: PostageStampStore.Entry) -> LetterShipmentFlow? {
+        guard let id = entry.reservationID, let flow = appStore.letterFlows.flow(id), flow.stage != .completed else { return nil }
+        return flow
+    }
+
+    @ViewBuilder
+    private func row(_ entry: PostageStampStore.Entry) -> some View {
+        HStack(spacing: 14) {
+            Toggle(isOn: Binding(
+                get: { appStore.selectedPostageIDs.contains(entry.id) && entry.status == .available },
+                set: { value in
+                    if value { appStore.selectedPostageIDs.insert(entry.id) }
+                    else { appStore.selectedPostageIDs.remove(entry.id) }
+                })) { Text("Marke \(entry.stamp.number) · \(entry.stamp.amount) €") }
+                .disabled(entry.status != .available || busy)
+            PostageTrackingNumberView(stamp: entry.stamp)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(entry.status.title).foregroundStyle(entry.status == .checkPrint ? .orange : .secondary)
+                if let detail = usageDetail(entry) {
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let flow = pendingLetterFlow(for: entry), entry.status == .checkPrint || entry.status == .printed {
+                Button("Im Briefversand prüfen") { appStore.letterFlowPreview = flow }
+            } else if entry.status == .checkPrint {
+                Button("Als gedruckt markieren") { store.update([entry.id], status: .printed) }
+                Button("Erneut verwenden …") { releaseEntry = entry }
+            } else if entry.status == .printed {
+                Button("Erneut verwenden …") { releaseEntry = entry }
+                    .help("Nach einem Fehldruck die Marke wieder für einen neuen Druck freigeben.")
+            }
+        }
+        .padding(.vertical, 4)
+        .disabled(busy)
+        .contextMenu {
+            if entry.status == .available {
+                Button("Als genutzt markieren …") { markUsedEntry = entry }
+            }
+            if (entry.status == .printed || entry.status == .checkPrint) && pendingLetterFlow(for: entry) == nil {
+                Button("Erneut verwenden …") { releaseEntry = entry }
+            }
+            if entry.stamp.trackingNumber != nil {
+                Button("Sendungsnummer kopieren") { copyTrackingNumbers([entry.stamp]) }
+            }
+        }
+    }
+
+    private func usageDetail(_ entry: PostageStampStore.Entry) -> String? {
+        var parts: [String] = []
+        if entry.isUsed, let date = entry.printedAt {
+            parts.append(date.formatted(date: .abbreviated, time: .shortened))
+        }
+        if let count = entry.printCount, count > 1 { parts.append("\(count)× gedruckt") }
+        if entry.status == .available, entry.releasedAt != nil { parts.append("Nach Fehldruck freigegeben") }
+        if let id = entry.reservationID, let flow = appStore.letterFlows.flow(id), !flow.recipientName.isEmpty {
+            parts.append("Brief an \(flow.recipientName)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
